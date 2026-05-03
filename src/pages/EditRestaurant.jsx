@@ -29,7 +29,7 @@ export default function EditRestaurant() {
         {/* Quick edit fields */}
         {['name','cuisine','tagline','address','phone','hours'].map(k=>(
           <div key={k} style={{marginBottom:14}}>
-            <div style={{fontSize:11,fontWeight:800,textTransform:'uppercase',letterSpacing:'0.08em',color:'#555',marginBottom:6,textTransform:'capitalize'}}>{k}</div>
+            <div style={{fontSize:11,fontWeight:800,letterSpacing:'0.08em',color:'#555',marginBottom:6,textTransform:'capitalize'}}>{k}</div>
             <input defaultValue={restaurant?.[k]||''} style={{width:'100%',padding:'10px 14px',background:'#141414',border:'1px solid #252525',borderRadius:10,color:'#f0f0f0',fontSize:14,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
               onChange={e=>setRestaurant(r=>({...r,[k]:e.target.value}))}/>
           </div>
