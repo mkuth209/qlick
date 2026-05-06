@@ -140,7 +140,7 @@ export default function AdminPanel() {
                 )}
 
                 {/* Actions */}
-                <div style={{ display:'flex',  flexShrink:0, gap:8 }}>
+                <div style={{display:'flex', flexShrink:0, gap:8}}>
                   <a href={`/${r.slug}`} target="_blank" rel="noreferrer" style={{ padding:'8px 14px', background:'#1a1a1a', border:'1px solid #252525', borderRadius:9, color:'#888', fontSize:12, fontWeight:700, textDecoration:'none' }}>📱 App</a>
                   <a href={`/${r.slug}/dashboard`} target="_blank" rel="noreferrer" style={{ padding:'8px 14px', background:'#1a1a1a', border:'1px solid #252525', borderRadius:9, color:'#888', fontSize:12, fontWeight:700, textDecoration:'none' }}>📊 Dashboard</a>
                   <a href={`/admin/${r.id}/edit`} style={{ padding:'8px 14px', background:'#1a1a1a', border:'1px solid #252525', borderRadius:9, color:'#888', fontSize:12, fontWeight:700, textDecoration:'none' }}>✏️ Edit</a>
