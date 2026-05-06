@@ -2,9 +2,9 @@
   "name": "qlick",
   "version": "1.0.0",
   "type": "module",
-  "scripts": {
+"scripts": {
     "dev": "vite",
-    "build": "npx vite build",
+    "build": "npm install && vite build",
     "preview": "vite preview"
   },
   "engines": {
