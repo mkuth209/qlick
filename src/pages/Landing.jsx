@@ -25,23 +25,24 @@ const STATS = [
 ];
 
 
-function Field({ id, label, placeholder, type = "text", form, setForm, errors, setErrors }) {
+function Field({ id, label, placeholder, type = "text", defaultValue, onChange, error }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "#666", marginBottom: 6 }}>{label}</div>
       <input
         type={type}
-        value={form[id]}
-        onChange={e => { setForm(f => ({ ...f, [id]: e.target.value })); setErrors(er => ({ ...er, [id]: "" })); }}
+        defaultValue={defaultValue}
+        onChange={onChange}
         placeholder={placeholder}
-        style={{ background: "#1a1a1a", border: `1.5px solid ${errors[id] ? "#ef4444" : "#2a2a2a"}`, borderRadius: 12, padding: "13px 16px", color: "#fff", fontFamily: "inherit", fontSize: 14, outline: "none", width: "100%", boxSizing: "border-box", transition: "border-color 0.2s" }}
-        onFocus={e => { e.target.style.borderColor = "#E03020"; }}
-        onBlur={e => { e.target.style.borderColor = errors[id] ? "#ef4444" : "#2a2a2a"; }}
+        style={{ background: "#1a1a1a", border: `1.5px solid ${error ? "#ef4444" : "#2a2a2a"}`, borderRadius: 12, padding: "13px 16px", color: "#fff", fontFamily: "inherit", fontSize: 14, outline: "none", width: "100%", boxSizing: "border-box", transition: "border-color 0.2s" }}
+        onFocus={e => e.target.style.borderColor = "#E03020"}
+        onBlur={e => e.target.style.borderColor = error ? "#ef4444" : "#2a2a2a"}
       />
-      {errors[id] && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>{errors[id]}</div>}
+      {error && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>{error}</div>}
     </div>
   );
 }
+
 export default function App() {
   const [lang, setLang] = useState("en");
   const [billing, setBilling] = useState("monthly"); // monthly | yearly
@@ -157,7 +158,7 @@ export default function App() {
 
   const openModal = () => { setStep(1); setSubmitted(false); setForm({ fullName:"", storeName:"", email:"", phone:"" }); setErrors({}); setShowModal(true); };
 
-  // Field moved outside - see below
+
 
   return (
     <div dir={dir} style={{ background: DARK, color: "#fff", fontFamily: ar ? "'Tajawal', sans-serif" : "'Syne', sans-serif", minHeight: "100vh", overflowX: "hidden" }}>
@@ -382,10 +383,10 @@ export default function App() {
 
                 {step===1 ? (
                   <>
-                    <Field id="fullName" label={t.fullName} placeholder={ar?"محمد أحمد":"Mohammed Ahmed"} form={form} setForm={setForm} errors={errors} setErrors={setErrors}/>
-                    <Field id="storeName" label={t.storeName} placeholder={ar?"مطعم البرجر الطازج":"Fresh Burger Restaurant"} form={form} setForm={setForm} errors={errors} setErrors={setErrors}/>
-                    <Field id="email" label={t.email} placeholder="example@email.com" type="email" form={form} setForm={setForm} errors={errors} setErrors={setErrors}/>
-                    <Field id="phone" label={t.phone} placeholder="+966 5X XXX XXXX" type="tel" form={form} setForm={setForm} errors={errors} setErrors={setErrors}/>
+                    <Field id="fullName" label={t.fullName} placeholder={ar?"محمد أحمد":"Mohammed Ahmed"} defaultValue={form.fullName} onChange={e=>{ setForm(f=>({...f,fullName:e.target.value})); setErrors(er=>({...er,fullName:""})); }} error={errors.fullName}/>
+                    <Field id="storeName" label={t.storeName} placeholder={ar?"مطعم البرجر الطازج":"Fresh Burger Restaurant"} defaultValue={form.storeName} onChange={e=>{ setForm(f=>({...f,storeName:e.target.value})); setErrors(er=>({...er,storeName:""})); }} error={errors.storeName}/>
+                    <Field id="email" label={t.email} placeholder="example@email.com" type="email" defaultValue={form.email} onChange={e=>{ setForm(f=>({...f,email:e.target.value})); setErrors(er=>({...er,email:""})); }} error={errors.email}/>
+                    <Field id="phone" label={t.phone} placeholder="+966 5X XXX XXXX" type="tel" defaultValue={form.phone} onChange={e=>{ setForm(f=>({...f,phone:e.target.value})); setErrors(er=>({...er,phone:""})); }} error={errors.phone}/>
                     <button className="btn-primary" style={{ width:"100%", padding:16, fontSize:15, borderRadius:14, marginTop:8 }} onClick={handleNext}>{t.next}</button>
                   </>
                 ) : (
