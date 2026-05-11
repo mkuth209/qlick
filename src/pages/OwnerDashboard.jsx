@@ -44,6 +44,12 @@ const T = {
     open:"● Open", closed:"○ Closed", to:"to", allDay:"24h", closed_day:"Closed",
     name:"Name", cuisine:"Cuisine", phone:"Phone", pickupTime:"Pickup Time",
     copy:"Copy", logout:"Sign Out",
+    employees:"Employees", addEmployee:"+ Add Employee", onlineNow:"Online Now", ordersHandled:"Orders Handled",
+    totalEarned:"Total Earned", pendingPayout:"Pending", thisMonth:"This Month", connectedAccount:"Connected Account",
+    payoutHistory:"Payout History", download:"Download", thisMonthBreakdown:"This Month Breakdown",
+    grossRevenue:"Gross Revenue", moyasarFee:"Moyasar Fees (1.9%)", netPayout:"Net Payout",
+    paid:"✓ Paid", pendingStatus:"⏳ Pending", change:"Change", payment:"Payments",
+    totalEmployees:"Total", online:"Online since", lastSeen:"Last seen", active:"Active now",
   },
   ar: {
     dir:"rtl", font:"'Tajawal',sans-serif",
@@ -79,6 +85,12 @@ const T = {
     open:"● مفتوح", closed:"○ مغلق", to:"إلى", allDay:"٢٤ ساعة", closed_day:"مغلق",
     name:"الاسم", cuisine:"نوع المطبخ", phone:"الجوال", pickupTime:"وقت الاستلام",
     copy:"نسخ", logout:"تسجيل الخروج",
+    employees:"الموظفون", addEmployee:"+ إضافة موظف", onlineNow:"متصل الآن", ordersHandled:"الطلبات المعالجة",
+    totalEarned:"إجمالي الأرباح", pendingPayout:"قيد الانتظار", thisMonth:"هذا الشهر", connectedAccount:"الحساب المرتبط",
+    payoutHistory:"سجل المدفوعات", download:"تحميل", thisMonthBreakdown:"تفاصيل هذا الشهر",
+    grossRevenue:"الإيرادات الإجمالية", moyasarFee:"رسوم ميسر (1.9%)", netPayout:"صافي الدفع",
+    paid:"✓ مدفوع", pendingStatus:"⏳ قيد الانتظار", change:"تغيير", payment:"المدفوعات",
+    totalEmployees:"الإجمالي", online:"متصل منذ", lastSeen:"آخر ظهور", active:"نشط الآن",
   }
 }
 
@@ -92,6 +104,21 @@ const ORDER_STATUS = (t) => ({
 
 const TYPE_ICON = { pickup:"🥡", delivery:"🛵", "dine-in":"🪑" }
 
+const EMPLOYEES = [
+  { id:1, name:"Ali Hassan",  nameAr:"علي حسن",    role:"manager",  branch:1, bName:"Tahlia",   bNameAr:"التحلية",  status:"online",  login:"8:00 AM",  handled:34, phone:"+966501111111" },
+  { id:2, name:"Omar Khalid", nameAr:"عمر خالد",   role:"employee", branch:1, bName:"Tahlia",   bNameAr:"التحلية",  status:"online",  login:"9:00 AM",  handled:18, phone:"+966502222222" },
+  { id:3, name:"Saad Nasser", nameAr:"سعد ناصر",   role:"employee", branch:2, bName:"Corniche", bNameAr:"الكورنيش", status:"offline", login:"—",        handled:0,  phone:"+966503333333" },
+  { id:4, name:"Faris Saleh", nameAr:"فارس صالح",  role:"manager",  branch:2, bName:"Corniche", bNameAr:"الكورنيش", status:"online",  login:"7:30 AM",  handled:22, phone:"+966505555555" },
+  { id:5, name:"Rami Adel",   nameAr:"رامي عادل",  role:"employee", branch:4, bName:"Andalus",  bNameAr:"الأندلس",  status:"online",  login:"10:00 AM", handled:11, phone:"+966506666666" },
+];
+
+const PAYOUTS = [
+  { id:1, date:"7 مايو 2026",  dateEn:"May 7, 2026",  amount:4280, status:"paid",    ref:"TXN-88821" },
+  { id:2, date:"30 أبريل 2026", dateEn:"Apr 30, 2026", amount:3910, status:"paid",    ref:"TXN-88654" },
+  { id:3, date:"8 مايو 2026",  dateEn:"May 8, 2026",  amount:1240, status:"pending", ref:"TXN-88999" },
+];
+
+
 // ── SMALL COMPONENTS ──────────────────────────────────────────────────────────
 function Card({ children, mb=14, extra={} }) {
   return <div style={{ background:"#111", border:"1px solid #1e1e1e", borderRadius:20, padding:22, marginBottom:mb, ...extra }}>{children}</div>
@@ -99,16 +126,24 @@ function Card({ children, mb=14, extra={} }) {
 
 function StatCard({ icon, label, value, color=R, trend, sub }) {
   return (
-    <div style={{ background:"#111", border:"1px solid #1e1e1e", borderRadius:18, padding:"18px 20px", flex:1, minWidth:140 }}>
+    <div style={{ background:"#fff", borderRadius:18, padding:"18px 20px", flex:1, minWidth:140, border:"1px solid #f0f0f0", boxShadow:"0 2px 8px rgba(0,0,0,0.04)" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
-        <div style={{ width:42, height:42, borderRadius:13, background:`${color}20`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>{icon}</div>
-        {trend!=null && <div style={{ fontSize:11, fontWeight:700, color:trend>=0?"#10b981":"#ef4444", background:trend>=0?"#d1fae5":"#fee2e2", padding:"3px 8px", borderRadius:20 }}>{trend>=0?"↑":"↓"}{Math.abs(trend)}%</div>}
+        <div style={{ width:42, height:42, borderRadius:13, background:`${color}15`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>{icon}</div>
+        {trend!=null&&<div style={{ fontSize:11, fontWeight:700, color:trend>=0?"#10b981":"#ef4444", background:trend>=0?"#d1fae5":"#fee2e2", padding:"3px 8px", borderRadius:20 }}>{trend>=0?"↑":"↓"}{Math.abs(trend)}%</div>}
       </div>
-      <div style={{ fontSize:26, fontWeight:900, color:"#fff", marginBottom:2 }}>{value}</div>
-      <div style={{ fontSize:12, color:"#666" }}>{label}</div>
-      {sub && <div style={{ fontSize:11, color:"#444", marginTop:1 }}>{sub}</div>}
+      <div style={{ fontSize:26, fontWeight:900, color:"#1a1a1a", marginBottom:2 }}>{value}</div>
+      <div style={{ fontSize:12, color:"#888" }}>{label}</div>
+      {sub&&<div style={{ fontSize:11, color:"#bbb", marginTop:1 }}>{sub}</div>}
     </div>
-  )
+  );
+}
+
+function Card({ children, mb=14 }) {
+  return <div style={{ background:"#fff", borderRadius:20, padding:22, marginBottom:mb, border:"1px solid #f0f0f0", boxShadow:"0 2px 8px rgba(0,0,0,0.04)" }}>{children}</div>;
+}
+
+function CardTitle({ children }) {
+  return <div style={{ fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em", color:"#aaa", marginBottom:14 }}>{children}</div>;
 }
 
 function Badge({ status, t }) {
@@ -699,10 +734,124 @@ function SettingsPage({ restaurant, t, lang }) {
   )
 }
 
+
+function EmployeesPage({ t, lang }) {
+  const [emps] = useState(EMPLOYEES);
+  const [showAdd, setShowAdd] = useState(false);
+  return (
+    <div>
+      <STitle title={t.employees} action={t.addEmployee} onClick={()=>setShowAdd(v=>!v)}/>
+      {showAdd&&(
+        <Card>
+          <CardTitle>{t.newEmployee}</CardTitle>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+            {[[t.fullName,"Ahmed"],[t.phone,"+966 5X"],[t.email,"x@x.com"],[t.password,"••••••••"]].map(([l,ph])=>(
+              <div key={l}><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{l}</div><input placeholder={ph} type={l===t.password?"password":"text"} style={inp()}/></div>
+            ))}
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+            <div><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.role}</div>
+              <select style={inp()}><option>{lang==="ar"?"موظف":"Employee"}</option><option>{lang==="ar"?"مدير":"Manager"}</option></select></div>
+            <div><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.branch}</div>
+              <select style={inp()}>{BRANCHES.map(b=><option key={b.id}>{lang==="ar"?b.nameAr:b.name}</option>)}</select></div>
+          </div>
+          <button style={{ padding:"9px 18px", background:R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"إضافة":"Add"}</button>
+        </Card>
+      )}
+      <div style={{ display:"flex", gap:12, marginBottom:18 }}>
+        <StatCard icon="👥" label={t.totalEmployees} value={emps.length} color="#6366f1"/>
+        <StatCard icon="🟢" label={t.onlineNow} value={emps.filter(e=>e.status==="online").length} color="#10b981"/>
+        <StatCard icon="📦" label={t.ordersHandled} value={emps.reduce((s,e)=>s+e.handled,0)} color={R}/>
+      </div>
+      {emps.map(emp=>(
+        <Card key={emp.id} mb={10}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ position:"relative", flexShrink:0 }}>
+              <div style={{ width:44, height:44, borderRadius:"50%", background:`${emp.role==="manager"?"#0ea5e9":"#E03020"}20`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:21 }}>
+                {emp.role==="manager"?"🧑‍💼":"👷"}
+              </div>
+              <div style={{ position:"absolute", bottom:0, right:0, width:12, height:12, borderRadius:"50%", background:emp.status==="online"?"#10b981":"#d1d5db", border:"2px solid #fff" }}/>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:2 }}>
+                <div style={{ fontWeight:700, fontSize:14 }}>{lang==="ar"?emp.nameAr:emp.name}</div>
+                <span style={{ padding:"2px 7px", borderRadius:10, fontSize:10, fontWeight:700, background:emp.role==="manager"?"#dbeafe":"#f0f0f0", color:emp.role==="manager"?"#0ea5e9":"#888" }}>
+                  {emp.role==="manager"?(lang==="ar"?"مدير":"Manager"):(lang==="ar"?"موظف":"Employee")}
+                </span>
+              </div>
+              <div style={{ fontSize:11, color:"#aaa" }}>📍 {lang==="ar"?emp.bNameAr:emp.bName} · 📞 {emp.phone}</div>
+              <div style={{ fontSize:11, color:"#aaa", marginTop:1 }}>
+                {emp.status==="online"?`🟢 ${t.online} ${emp.login} · ${emp.handled} ${t.orders_count}`:`⚫ ${t.lastSeen}`}
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:5 }}>
+              <button style={{ padding:"6px 11px", background:"#f8f8f8", border:"1px solid #f0f0f0", borderRadius:9, color:"#666", fontSize:11, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"تعديل":"Edit"}</button>
+              <button style={{ padding:"6px 11px", background:"#fee2e2", border:"1px solid #fecaca", borderRadius:9, color:"#ef4444", fontSize:11, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"حذف":"Remove"}</button>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+
+function PaymentPage({ t, lang }) {
+  const pending = PAYOUTS.find(p=>p.status==="pending")?.amount||0;
+  const paid = PAYOUTS.filter(p=>p.status==="paid").reduce((s,p)=>s+p.amount,0);
+  return (
+    <div>
+      <STitle title={t.payment}/>
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:18 }}>
+        <StatCard icon="💰" label={t.totalEarned} value={`﷼${paid.toLocaleString()}`} color="#10b981"/>
+        <StatCard icon="⏳" label={t.pendingPayout} value={`﷼${pending.toLocaleString()}`} color="#f59e0b"/>
+        <StatCard icon="📊" label={t.thisMonth} value="﷼7,960" trend={14} color={R}/>
+        <StatCard icon="💳" label="Moyasar" value="1.9%" color="#6366f1"/>
+      </div>
+      <Card>
+        <CardTitle>{t.connectedAccount}</CardTitle>
+        <div style={{ display:"flex", alignItems:"center", gap:12, padding:13, background:"#f8f8f8", borderRadius:13 }}>
+          <div style={{ width:44, height:44, borderRadius:13, background:"#10b98120", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🏦</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:700, fontSize:14 }}>{lang==="ar"?"بنك الراجحي":"Al Rajhi Bank"}</div>
+            <div style={{ fontSize:12, color:"#888" }}>IBAN: SA•• •••• •••• •••• 4521</div>
+            <div style={{ fontSize:11, color:"#10b981", marginTop:1 }}>✓ {lang==="ar"?"موثق عبر ميسر":"Verified via Moyasar"}</div>
+          </div>
+          <button style={{ padding:"7px 13px", background:`${R}10`, border:`1px solid ${R}30`, borderRadius:9, color:R, fontSize:12, fontWeight:700, cursor:"pointer" }}>{t.change}</button>
+        </div>
+      </Card>
+      <Card>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:13 }}>
+          <CardTitle>{t.payoutHistory}</CardTitle>
+          <button style={{ padding:"5px 11px", background:"#f8f8f8", border:"1px solid #f0f0f0", borderRadius:8, color:"#555", fontSize:11, fontWeight:700, cursor:"pointer" }}>{t.download}</button>
+        </div>
+        {PAYOUTS.map(p=>(
+          <div key={p.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid #f8f8f8" }}>
+            <div><div style={{ fontWeight:700, fontSize:13 }}>{lang==="ar"?p.date:p.dateEn}</div><div style={{ fontSize:11, color:"#aaa" }}>{p.ref}</div></div>
+            <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+              <div style={{ fontWeight:800, fontSize:14 }}>﷼{p.amount.toLocaleString()}</div>
+              <span style={{ padding:"3px 9px", borderRadius:20, fontSize:10, fontWeight:700, background:p.status==="paid"?"#d1fae5":"#fef3c7", color:p.status==="paid"?"#10b981":"#d97706" }}>{p.status==="paid"?t.paid:t.pendingStatus}</span>
+            </div>
+          </div>
+        ))}
+      </Card>
+      <Card mb={0}>
+        <CardTitle>{t.thisMonthBreakdown}</CardTitle>
+        {[[t.grossRevenue,"﷼8,120","#1a1a1a"],[t.moyasarFee,"−﷼154","#ef4444"],[t.netPayout,"﷼7,966",R]].map(([l,v,c],i)=>(
+          <div key={l} style={{ display:"flex", justifyContent:"space-between", padding:"9px 0", borderBottom:i<2?"1px solid #f8f8f8":"none" }}>
+            <span style={{ fontSize:13, color:i===2?"#1a1a1a":"#666", fontWeight:i===2?800:500 }}>{l}</span>
+            <span style={{ fontSize:13, fontWeight:800, color:c }}>{v}</span>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
 // ── NAV CONFIG ────────────────────────────────────────────────────────────────
 const NAV = {
-  owner:   [{id:"overview",icon:"📊"},{id:"orders",icon:"📦",badge:true},{id:"menu",icon:"🍽️"},{id:"stock",icon:"🗃️"},{id:"analytics",icon:"📈"},{id:"branches",icon:"🏪"},{id:"reviews",icon:"⭐"},{id:"hours",icon:"🕐"},{id:"settings",icon:"⚙️"}],
-  manager: [{id:"overview",icon:"📊"},{id:"orders",icon:"📦",badge:true},{id:"menu",icon:"🍽️"},{id:"stock",icon:"🗃️"},{id:"analytics",icon:"📈"},{id:"branches",icon:"🏪"},{id:"reviews",icon:"⭐"},{id:"hours",icon:"🕐"},{id:"settings",icon:"⚙️"}],
+  owner:   [{id:"overview",icon:"📊"},{id:"orders",icon:"📦",badge:true},{id:"menu",icon:"🍽️"},{id:"stock",icon:"🗃️"},{id:"analytics",icon:"📈"},{id:"employees",icon:"👥"},{id:"branches",icon:"🏪"},{id:"reviews",icon:"⭐"},{id:"hours",icon:"🕐"},{id:"payment",icon:"💳"},{id:"settings",icon:"⚙️"}],
+  manager: [{id:"overview",icon:"📊"},{id:"orders",icon:"📦",badge:true},{id:"menu",icon:"🍽️"},{id:"stock",icon:"🗃️"},{id:"analytics",icon:"📈"},{id:"employees",icon:"👥"},{id:"branches",icon:"🏪"},{id:"reviews",icon:"⭐"},{id:"hours",icon:"🕐"},{id:"settings",icon:"⚙️"}],
   employee:[{id:"orders",icon:"📦",badge:true},{id:"menu",icon:"🍽️"},{id:"stock",icon:"🗃️"}],
 }
 
