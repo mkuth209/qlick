@@ -1,3 +1,33 @@
+import { useState, useEffect } from "react";
+
+const R = "#E03020";
+const DOT = "#C0392B";
+
+function Logo({ size=28 }) {
+  const dot = size * 0.38;
+  return (
+    <div style={{ display:"inline-flex", alignItems:"flex-end", gap:0, lineHeight:1 }}>
+      <span style={{ fontSize:size, fontWeight:900, color:"#fff", fontFamily:"'Arial Black','Helvetica Neue',sans-serif", letterSpacing:"-0.02em", lineHeight:1 }}>qlick</span>
+      <span style={{ width:dot, height:dot, borderRadius:"50%", background:DOT, marginLeft:size*0.05, marginBottom:size*0.08, flexShrink:0, display:"inline-block" }}/>
+    </div>
+  );
+}
+
+function Field({ id, label, placeholder, type="text", form, setForm, errors, setErrors }) {
+  return (
+    <div style={{ marginBottom:14 }}>
+      <div style={{ fontSize:12, fontWeight:700, color:"#555", marginBottom:5 }}>{label}</div>
+      <input type={type} value={form[id]}
+        onChange={e => { setForm(f=>({...f,[id]:e.target.value})); setErrors(er=>({...er,[id]:""})); }}
+        placeholder={placeholder}
+        style={{ background:"#1a1a1a", border:`1.5px solid ${errors[id]?"#ef4444":"#2a2a2a"}`, borderRadius:11, padding:"12px 15px", color:"#fff", fontFamily:"inherit", fontSize:14, outline:"none", width:"100%", boxSizing:"border-box" }}
+        onFocus={e=>e.target.style.borderColor="#E03020"}
+        onBlur={e=>e.target.style.borderColor=errors[id]?"#ef4444":"#2a2a2a"}/>
+      {errors[id] && <div style={{ fontSize:11, color:"#ef4444", marginTop:3 }}>{errors[id]}</div>}
+    </div>
+  );
+}
+
 import { useState, useEffect, useRef } from "react";
 
 const R = "#E03020";
@@ -23,25 +53,6 @@ const STATS = [
   { value: "24/7", label: "Order automation", labelAr: "أتمتة الطلبات" },
   { value: "100%", label: "Your brand", labelAr: "علامتك التجارية" },
 ];
-
-
-function Field({ id, label, placeholder, type = "text", form, errors, setForm, setErrors }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#666", marginBottom: 6 }}>{label}</div>
-      <input
-        type={type}
-        value={form[id]}
-        onChange={e => { setForm(f => ({ ...f, [id]: e.target.value })); setErrors(er => ({ ...er, [id]: "" })); }}
-        placeholder={placeholder}
-        style={{ background: "#1a1a1a", border: `1.5px solid ${errors[id] ? "#ef4444" : "#2a2a2a"}`, borderRadius: 12, padding: "13px 16px", color: "#fff", fontFamily: "inherit", fontSize: 14, outline: "none", width: "100%", boxSizing: "border-box", transition: "border-color 0.2s" }}
-        onFocus={e => { e.target.style.borderColor = "#E03020"; }}
-        onBlur={e => { e.target.style.borderColor = errors[id] ? "#ef4444" : "#2a2a2a"; }}
-      />
-      {errors[id] && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>{errors[id]}</div>}
-    </div>
-  );
-}
 
 export default function App() {
   const [lang, setLang] = useState("en");
@@ -382,10 +393,10 @@ export default function App() {
 
                 {step===1 ? (
                   <>
-                    <Field id="fullName" form={form} errors={errors} setForm={setForm} setErrors={setErrors} label={t.fullName} placeholder={ar?"محمد أحمد":"Mohammed Ahmed"}/>
-                    <Field id="storeName" form={form} errors={errors} setForm={setForm} setErrors={setErrors} label={t.storeName} placeholder={ar?"مطعم البرجر الطازج":"Fresh Burger Restaurant"}/>
-                    <Field id="email" form={form} errors={errors} setForm={setForm} setErrors={setErrors} label={t.email} placeholder="example@email.com" type="email"/>
-                    <Field id="phone" form={form} errors={errors} setForm={setForm} setErrors={setErrors} label={t.phone} placeholder="+966 5X XXX XXXX" type="tel"/>
+                    <Field id="fullName" form={form} setForm={setForm} errors={errors} setErrors={setErrors} label={t.fullName} placeholder={ar?"محمد أحمد":"Mohammed Ahmed"}/>
+                    <Field id="storeName" form={form} setForm={setForm} errors={errors} setErrors={setErrors} label={t.storeName} placeholder={ar?"مطعم البرجر الطازج":"Fresh Burger Restaurant"}/>
+                    <Field id="email" form={form} setForm={setForm} errors={errors} setErrors={setErrors} label={t.email} placeholder="example@email.com" type="email"/>
+                    <Field id="phone" form={form} setForm={setForm} errors={errors} setErrors={setErrors} label={t.phone} placeholder="+966 5X XXX XXXX" type="tel"/>
                     <button className="btn-primary" style={{ width:"100%", padding:16, fontSize:15, borderRadius:14, marginTop:8 }} onClick={handleNext}>{t.next}</button>
                   </>
                 ) : (
