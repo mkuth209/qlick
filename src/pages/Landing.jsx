@@ -25,20 +25,20 @@ const STATS = [
 ];
 
 
-function Field({ id, label, placeholder, type = "text", defaultValue, onChange, error }) {
+function Field({ id, label, placeholder, type = "text", form, errors, setForm, setErrors }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "#666", marginBottom: 6 }}>{label}</div>
       <input
         type={type}
-        defaultValue={defaultValue}
-        onChange={onChange}
+        value={form[id]}
+        onChange={e => { setForm(f => ({ ...f, [id]: e.target.value })); setErrors(er => ({ ...er, [id]: "" })); }}
         placeholder={placeholder}
-        style={{ background: "#1a1a1a", border: `1.5px solid ${error ? "#ef4444" : "#2a2a2a"}`, borderRadius: 12, padding: "13px 16px", color: "#fff", fontFamily: "inherit", fontSize: 14, outline: "none", width: "100%", boxSizing: "border-box", transition: "border-color 0.2s" }}
-        onFocus={e => e.target.style.borderColor = "#E03020"}
-        onBlur={e => e.target.style.borderColor = error ? "#ef4444" : "#2a2a2a"}
+        style={{ background: "#1a1a1a", border: `1.5px solid ${errors[id] ? "#ef4444" : "#2a2a2a"}`, borderRadius: 12, padding: "13px 16px", color: "#fff", fontFamily: "inherit", fontSize: 14, outline: "none", width: "100%", boxSizing: "border-box", transition: "border-color 0.2s" }}
+        onFocus={e => { e.target.style.borderColor = "#E03020"; }}
+        onBlur={e => { e.target.style.borderColor = errors[id] ? "#ef4444" : "#2a2a2a"; }}
       />
-      {error && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>{error}</div>}
+      {errors[id] && <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>{errors[id]}</div>}
     </div>
   );
 }
@@ -157,7 +157,6 @@ export default function App() {
   const handleNext = () => { if (validate()) setStep(2); };
 
   const openModal = () => { setStep(1); setSubmitted(false); setForm({ fullName:"", storeName:"", email:"", phone:"" }); setErrors({}); setShowModal(true); };
-
 
 
   return (
@@ -383,10 +382,10 @@ export default function App() {
 
                 {step===1 ? (
                   <>
-                    <Field id="fullName" label={t.fullName} placeholder={ar?"محمد أحمد":"Mohammed Ahmed"} defaultValue={form.fullName} onChange={e=>{ setForm(f=>({...f,fullName:e.target.value})); setErrors(er=>({...er,fullName:""})); }} error={errors.fullName}/>
-                    <Field id="storeName" label={t.storeName} placeholder={ar?"مطعم البرجر الطازج":"Fresh Burger Restaurant"} defaultValue={form.storeName} onChange={e=>{ setForm(f=>({...f,storeName:e.target.value})); setErrors(er=>({...er,storeName:""})); }} error={errors.storeName}/>
-                    <Field id="email" label={t.email} placeholder="example@email.com" type="email" defaultValue={form.email} onChange={e=>{ setForm(f=>({...f,email:e.target.value})); setErrors(er=>({...er,email:""})); }} error={errors.email}/>
-                    <Field id="phone" label={t.phone} placeholder="+966 5X XXX XXXX" type="tel" defaultValue={form.phone} onChange={e=>{ setForm(f=>({...f,phone:e.target.value})); setErrors(er=>({...er,phone:""})); }} error={errors.phone}/>
+                    <Field id="fullName" form={form} errors={errors} setForm={setForm} setErrors={setErrors} label={t.fullName} placeholder={ar?"محمد أحمد":"Mohammed Ahmed"}/>
+                    <Field id="storeName" form={form} errors={errors} setForm={setForm} setErrors={setErrors} label={t.storeName} placeholder={ar?"مطعم البرجر الطازج":"Fresh Burger Restaurant"}/>
+                    <Field id="email" form={form} errors={errors} setForm={setForm} setErrors={setErrors} label={t.email} placeholder="example@email.com" type="email"/>
+                    <Field id="phone" form={form} errors={errors} setForm={setForm} setErrors={setErrors} label={t.phone} placeholder="+966 5X XXX XXXX" type="tel"/>
                     <button className="btn-primary" style={{ width:"100%", padding:16, fontSize:15, borderRadius:14, marginTop:8 }} onClick={handleNext}>{t.next}</button>
                   </>
                 ) : (
