@@ -137,18 +137,28 @@ export default function App() {
     setShowModal(true);
   };
 
-  const Field = ({ id, label, placeholder, type="text" }) => (
+  const Field = ({ id, label, placeholder, type="text" }) => {
+  const handleChange = (e) => {
+    const val = e.target.value;
+    setForm(f => ({ ...f, [id]: val }));
+    setErrors(er => ({ ...er, [id]: "" }));
+  };
+  return (
     <div style={{ marginBottom:14 }}>
       <div style={{ fontSize:12, fontWeight:700, color:"#555", marginBottom:5 }}>{label}</div>
-      <input type={type} value={form[id]}
-        onChange={e => { setForm(f=>({...f,[id]:e.target.value})); setErrors(er=>({...er,[id]:""})); }}
+      <input
+        type={type}
+        value={form[id]}
+        onChange={handleChange}
         placeholder={placeholder}
         style={{ background:"#1a1a1a", border:`1.5px solid ${errors[id]?"#ef4444":"#2a2a2a"}`, borderRadius:11, padding:"12px 15px", color:"#fff", fontFamily:"inherit", fontSize:14, outline:"none", width:"100%", boxSizing:"border-box" }}
         onFocus={e=>e.target.style.borderColor=R}
-        onBlur={e=>e.target.style.borderColor=errors[id]?"#ef4444":"#2a2a2a"}/>
+        onBlur={e=>e.target.style.borderColor=errors[id]?"#ef4444":"#2a2a2a"}
+      />
       {errors[id] && <div style={{ fontSize:11, color:"#ef4444", marginTop:3 }}>{errors[id]}</div>}
     </div>
   );
+};
 
   return (
     <div dir={dir} style={{ background:DARK, color:"#fff", fontFamily:ar?"'Tajawal',sans-serif":"'Syne',sans-serif", minHeight:"100vh", overflowX:"hidden" }}>
