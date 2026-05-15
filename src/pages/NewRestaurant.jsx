@@ -99,7 +99,7 @@ export default function NewRestaurant() {
   const [step, setStep] = useState(0) // 0=info, 1=design, 2=publish
   const [saving, setSaving] = useState(false)
 
-  const [info, setInfo] = useState({ name:'', cuisine:'', tagline:'', description:'', address:'', phone:'', hours:'', pickupTime:'15-20', currency:'SAR' })
+  const [info, setInfo] = useState({ name:'', cuisine:'', tagline:'', description:'', address:'', phone:'', hours:'', pickupTime:'15-20', currency:'SAR', logoUrl:null, logoFile:null })
   const [design, setDesign] = useState(PRESETS[0])
   const [designPanel, setDesignPanel] = useState('presets')
 
