@@ -54,7 +54,7 @@ export default function CustomerApp() {
     </div>
   )
 
-  const design = restaurant.design || {}
+  const design = typeof restaurant.design === 'string' ? JSON.parse(restaurant.design) : (restaurant.design || {})
   const logoUrl = restaurant.logo_url || null
   const R = design.primary || '#E03020'
   const BG = design.bg || '#ffffff'
@@ -108,11 +108,9 @@ export default function CustomerApp() {
     <div style={{ position:'fixed', inset:0, background:R, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', zIndex:100, fontFamily:'sans-serif' }}>
       <style>{`@keyframes logoIn{0%{transform:scale(0.5);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes shimmer{0%,100%{opacity:0.4}50%{opacity:1}}`}</style>
       <div style={{ animation:'logoIn 0.8s cubic-bezier(0.34,1.56,0.64,1) both' }}>
-        <div style={{ width:120, height:120, background:'rgba(255,255,255,0.15)', borderRadius:32, overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center', fontSize:64, marginBottom:20, backdropFilter:'blur(10px)' }}>
-          {logoUrl
-            ? <img src={logoUrl} alt={restaurant.name} style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
-            : <span>{restaurant.emoji || '🍔'}</span>
-          }
+        <div style={{ width:120, height:120, background:'rgba(255,255,255,0.15)', borderRadius:32, display:'flex', alignItems:'center', justifyContent:'center', fontSize:64, marginBottom:20, backdropFilter:'blur(10px)' }}>
+{logoUrl ? <img src={logoUrl} alt={restaurant.name} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:32}}/> : <span style={{fontSize:64}}>{restaurant.emoji || '🍔'}</span>}
+
         </div>
         <div style={{ textAlign:'center', color:'#fff', fontWeight:900, fontSize:28, letterSpacing:2 }}>{restaurant.name?.toUpperCase()}</div>
         {restaurant.tagline && <div style={{ textAlign:'center', color:'rgba(255,255,255,0.7)', fontSize:13, marginTop:4 }}>{restaurant.tagline}</div>}
@@ -127,11 +125,8 @@ export default function CustomerApp() {
   if (screen === 'lang') return (
     <div style={{ position:'fixed', inset:0, background:'#fff', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:32, fontFamily:'sans-serif' }}>
       <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}`}</style>
-      <div style={{ width:80, height:80, borderRadius:24, background:R, overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center', fontSize:40, marginBottom:32, animation:'slideUp 0.5s ease both' }}>
-        {logoUrl
-          ? <img src={logoUrl} alt={restaurant.name} style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
-          : <span>{restaurant.emoji || '🍔'}</span>
-        }
+      <div style={{ width:80, height:80, borderRadius:24, background:R, display:'flex', alignItems:'center', justifyContent:'center', fontSize:40, marginBottom:32, animation:'slideUp 0.5s ease both' }}>
+        {restaurant.emoji || '🍔'}
       </div>
       <div style={{ fontSize:22, fontWeight:700, color:'#1a1a1a', marginBottom:8, animation:'slideUp 0.5s 0.1s ease both' }}>Choose Language</div>
       <div style={{ fontSize:14, color:'#888', marginBottom:40, animation:'slideUp 0.5s 0.2s ease both' }}>اختر اللغة</div>
