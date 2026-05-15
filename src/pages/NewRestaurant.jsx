@@ -154,6 +154,30 @@ export default function NewRestaurant() {
               <div style={{fontSize:24,fontWeight:800,letterSpacing:'-0.03em',marginBottom:6}}>Restaurant Info</div>
               <div style={{fontSize:14,color:'#555'}}>Tell us about the restaurant — we'll build the app around it.</div>
             </div>
+            {/* Logo Upload */}
+            <div style={{marginBottom:20}}>
+              <div style={{fontSize:11,fontWeight:800,letterSpacing:'0.08em',textTransform:'uppercase',color:'#555',marginBottom:7}}>Restaurant Logo</div>
+              <div style={{display:'flex',alignItems:'center',gap:14}}>
+                <div style={{width:72,height:72,borderRadius:18,background:'#141414',border:'2px dashed #2a2a2a',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
+                  {info.logoUrl ? <img src={info.logoUrl} alt="logo" style={{width:'100%',height:'100%',objectFit:'cover'}}/> : <span style={{fontSize:32}}>🍔</span>}
+                </div>
+                <div style={{flex:1}}>
+                  <label style={{display:'block',padding:'10px 16px',background:'#141414',border:'1.5px solid #2a2a2a',borderRadius:10,color:'#888',fontSize:13,fontWeight:600,cursor:'pointer',textAlign:'center'}}>
+                    📸 Upload Logo
+                    <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{
+                      const file=e.target.files[0];
+                      if(file){
+                        const reader=new FileReader();
+                        reader.onload=ev=>setInfo(i=>({...i,logoUrl:ev.target.result}));
+                        reader.readAsDataURL(file);
+                      }
+                    }}/>
+                  </label>
+                  <div style={{fontSize:11,color:'#444',marginTop:6,textAlign:'center'}}>PNG, JPG up to 5MB</div>
+                </div>
+              </div>
+            </div>
+
             {[['name','Restaurant Name *','e.g. Al Nakheel, Burger Lab'],['cuisine','Cuisine Type *','e.g. Fried Chicken, Saudi, Sushi'],['tagline','Tagline','e.g. Crispy. Golden. Perfect.'],['address','Address','123 Tahlia St, Riyadh'],['phone','Phone','+966 50 000 0000'],['hours','Opening Hours','Daily 10:00 AM – 12:00 AM'],['pickupTime','Pickup Time (min)','15-20']].map(([k,label,ph])=>(
               <div key={k} style={{marginBottom:16}}>
                 <div style={{fontSize:11,fontWeight:800,letterSpacing:'0.08em',textTransform:'uppercase',color:'#555',marginBottom:7}}>{label}</div>
