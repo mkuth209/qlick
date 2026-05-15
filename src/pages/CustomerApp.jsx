@@ -54,7 +54,12 @@ export default function CustomerApp() {
     </div>
   )
 
-  const R = restaurant.design?.primaryColor || '#E03020'
+  const design = restaurant.design || {}
+  const R = design.primary || '#E03020'
+  const BG = design.bg || '#ffffff'
+  const SURFACE = design.surface || '#f8f8f8'
+  const TEXT = design.text || '#1a1a1a'
+  const isDark = design.theme === 'dark'
   const categories = [...new Set(menu.map(m => m.category || 'General'))]
   const catItems = menu.filter(m => (m.category || 'General') === activeCat)
   const totalItems = cart.reduce((s, c) => s + c.qty, 0)
