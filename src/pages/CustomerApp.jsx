@@ -55,6 +55,7 @@ export default function CustomerApp() {
   )
 
   const design = restaurant.design || {}
+  const logoUrl = restaurant.logo_url || null
   const R = design.primary || '#E03020'
   const BG = design.bg || '#ffffff'
   const SURFACE = design.surface || '#f8f8f8'
@@ -108,7 +109,7 @@ export default function CustomerApp() {
       <style>{`@keyframes logoIn{0%{transform:scale(0.5);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes shimmer{0%,100%{opacity:0.4}50%{opacity:1}}`}</style>
       <div style={{ animation:'logoIn 0.8s cubic-bezier(0.34,1.56,0.64,1) both' }}>
         <div style={{ width:120, height:120, background:'rgba(255,255,255,0.15)', borderRadius:32, display:'flex', alignItems:'center', justifyContent:'center', fontSize:64, marginBottom:20, backdropFilter:'blur(10px)' }}>
-          {restaurant.logo_url ? <img src={restaurant.logo_url} alt={restaurant.name} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:32}}/> : <span>{restaurant.emoji || '🍔'}</span>}
+          {restaurant.logo_url ? <img src={restaurant.logo_url} alt={restaurant.name} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:32}}/> : <span>{logoUrl ? <img src={logoUrl} alt={restaurant.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/> : restaurant.emoji || '🍔'}</span>}
         </div>
         <div style={{ textAlign:'center', color:'#fff', fontWeight:900, fontSize:28, letterSpacing:2 }}>{restaurant.name?.toUpperCase()}</div>
         {restaurant.tagline && <div style={{ textAlign:'center', color:'rgba(255,255,255,0.7)', fontSize:13, marginTop:4 }}>{restaurant.tagline}</div>}
