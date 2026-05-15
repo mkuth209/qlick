@@ -111,11 +111,28 @@ export default function NewRestaurant() {
   const publish = async () => {
     if (!info.name || !info.cuisine) { alert('Please fill in name and cuisine.'); setStep(0); return }
     setSaving(true)
+
+    // Upload logo to Supabase Storage
+    let logoUrl = null
+    if (info.logoFile) {
+      const file = info.logoFile
+      const ext = file.name.split('.').pop() || 'png'
+      const fileName = slug + '-' + Date.now() + '.' + ext
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(fileName, file, { contentType: file.type, upsert: true })
+      if (!uploadError) {
+        const { data: urlData } = supabase.storage.from('logos').getPublicUrl(fileName)
+        logoUrl = urlData.publicUrl
+      }
+    }
+
     const { data: rest, error } = await supabase.from('restaurants').insert({
       name: info.name, slug, cuisine: info.cuisine, tagline: info.tagline,
       description: info.description, address: info.address, phone: info.phone,
       hours: info.hours, pickup_time: info.pickupTime, currency: info.currency,
       design, status: 'active', emoji: design.emoji || '🏪',
+      logo_url: logoUrl,
     }).select().single()
     if (error) { alert('Error: ' + error.message); setSaving(false); return }
     navigate('/admin')
