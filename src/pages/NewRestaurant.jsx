@@ -112,20 +112,7 @@ export default function NewRestaurant() {
     if (!info.name || !info.cuisine) { alert('Please fill in name and cuisine.'); setStep(0); return }
     setSaving(true)
 
-    // Upload logo to Supabase Storage
-    let logoUrl = null
-    if (info.logoFile) {
-      const file = info.logoFile
-      const ext = file.name.split('.').pop() || 'png'
-      const fileName = slug + '-' + Date.now() + '.' + ext
-      const { error: uploadError } = await supabase.storage
-        .from('logos')
-        .upload(fileName, file, { contentType: file.type, upsert: true })
-      if (!uploadError) {
-        const { data: urlData } = supabase.storage.from('logos').getPublicUrl(fileName)
-        logoUrl = urlData.publicUrl
-      }
-    }
+    const logoUrl = info.savedLogoUrl || null
 
     const { data: rest, error } = await supabase.from('restaurants').insert({
       name: info.name, slug, cuisine: info.cuisine, tagline: info.tagline,
@@ -181,13 +168,21 @@ export default function NewRestaurant() {
                 <div style={{flex:1}}>
                   <label style={{display:'block',padding:'10px 16px',background:'#141414',border:'1.5px solid #2a2a2a',borderRadius:10,color:'#888',fontSize:13,fontWeight:600,cursor:'pointer',textAlign:'center'}}>
                     📸 Upload Logo
-                    <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{
+                    <input type="file" accept="image/*" style={{display:'none'}} onChange={async e=>{
                       const file=e.target.files[0];
-                      if(file){
-                        const reader=new FileReader();
-                        reader.onload=ev=>setInfo(i=>({...i,logoUrl:ev.target.result,logoFile:file}));
-                        reader.readAsDataURL(file);
-                      }
+                      if(!file) return;
+                      const reader=new FileReader();
+                      reader.onload=ev=>setInfo(i=>({...i,logoUrl:ev.target.result}));
+                      reader.readAsDataURL(file);
+                      try {
+                        const ext=file.name.split('.').pop()||'png';
+                        const fileName='logo-'+Date.now()+'.'+ext;
+                        const {error:upErr}=await supabase.storage.from('logos').upload(fileName,file,{contentType:file.type,upsert:true});
+                        if(!upErr){
+                          const {data:urlData}=supabase.storage.from('logos').getPublicUrl(fileName);
+                          setInfo(i=>({...i,savedLogoUrl:urlData.publicUrl}));
+                        }
+                      } catch(err){ console.error(err); }
                     }}/>
                   </label>
                   <div style={{fontSize:11,color:'#444',marginTop:6,textAlign:'center'}}>PNG, JPG up to 5MB</div>
