@@ -161,6 +161,8 @@ function Tog({ label, sub, value, onChange }) {
 }
 
 // ── PAGES ─────────────────────────────────────────────────────────────────────
+function STitle({ title, action, onClick }) { return (<div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}><div style={{ fontSize:22, fontWeight:900, letterSpacing:"-0.03em" }}>{title}</div>{action&&<button onClick={onClick} style={{ padding:"9px 18px", background:"#E03020", border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{action}</button>}</div>); }
+
 function OverviewPage({ restaurant, t, lang }) {
   const [orders, setOrders] = useState([])
   const [reviews, setReviews] = useState([])
@@ -966,6 +968,7 @@ export default function OwnerDashboard() {
     </div>
   )
 }
+
 
 
 
