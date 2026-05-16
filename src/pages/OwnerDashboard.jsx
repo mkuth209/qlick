@@ -120,8 +120,6 @@ const PAYOUTS = [
 
 
 // ── SMALL COMPONENTS ──────────────────────────────────────────────────────────
-const inp = (extra={}) => ({ width:"100%", padding:"9px 13px", background:"#1a1a1a", border:"1.5px solid #2a2a2a", borderRadius:11, fontSize:13, color:"#fff", outline:"none", fontFamily:"inherit", boxSizing:"border-box", ...extra });
-
 function Card({ children, mb=14, extra={} }) {
   return <div style={{ background:"#111", border:"1px solid #1e1e1e", borderRadius:20, padding:22, marginBottom:mb, ...extra }}>{children}</div>
 }
@@ -140,7 +138,9 @@ function StatCard({ icon, label, value, color=R, trend, sub }) {
   );
 }
 
-
+function Card({ children, mb=14 }) {
+  return <div style={{ background:"#fff", borderRadius:20, padding:22, marginBottom:mb, border:"1px solid #f0f0f0", boxShadow:"0 2px 8px rgba(0,0,0,0.04)" }}>{children}</div>;
+}
 
 function CardTitle({ children }) {
   return <div style={{ fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em", color:"#aaa", marginBottom:14 }}>{children}</div>;
@@ -163,8 +163,6 @@ function Tog({ label, sub, value, onChange }) {
 }
 
 // ── PAGES ─────────────────────────────────────────────────────────────────────
-function STitle({ title, action, onClick }) { return (<div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}><div style={{ fontSize:22, fontWeight:900, letterSpacing:"-0.03em" }}>{title}</div>{action&&<button onClick={onClick} style={{ padding:"9px 18px", background:"#E03020", border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{action}</button>}</div>); }
-
 function OverviewPage({ restaurant, t, lang }) {
   const [orders, setOrders] = useState([])
   const [reviews, setReviews] = useState([])
@@ -755,7 +753,7 @@ function EmployeesPage({ t, lang }) {
             <div><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.role}</div>
               <select style={inp()}><option>{lang==="ar"?"موظف":"Employee"}</option><option>{lang==="ar"?"مدير":"Manager"}</option></select></div>
             <div><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.branch}</div>
-              <select style={inp()}>{[{id:1,name:"Branch 1",nameAr:"��� 1"}].map(b=><option key={b.id}>{lang==="ar"?b.nameAr:b.name}</option>)}</select></div>
+              <select style={inp()}>{BRANCHES.map(b=><option key={b.id}>{lang==="ar"?b.nameAr:b.name}</option>)}</select></div>
           </div>
           <button style={{ padding:"9px 18px", background:R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"إضافة":"Add"}</button>
         </Card>
@@ -962,17 +960,9 @@ export default function OwnerDashboard() {
           {page==="branches"  && <BranchesPage restaurant={restaurant} t={t} lang={lang}/>}
           {page==="reviews"   && <ReviewsPage restaurant={restaurant} t={t}/>}
           {page==="hours"     && <HoursPage t={t}/>}
-   {page==="employees"  && <EmployeesPage restaurant={restaurant} t={t} lang={lang} role={role}/>}
-   {page==="payment"    && <PaymentPage t={t} lang={lang}/>}
-          {page==="settings"   && <SettingsPage restaurant={restaurant} t={t} lang={lang}/>}
+          {page==="settings"  && <SettingsPage restaurant={restaurant} t={t} lang={lang}/>}
         </div>
       </div>
     </div>
   )
 }
-
-
-
-
-
-
