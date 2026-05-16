@@ -44,12 +44,12 @@ const T = {
     open:"● Open", closed:"○ Closed", to:"to", allDay:"24h", closed_day:"Closed",
     name:"Name", cuisine:"Cuisine", phone:"Phone", pickupTime:"Pickup Time",
     copy:"Copy", logout:"Sign Out",
-    totalEarned:"Total Earned", pendingPayout:"Pending", thisMonth:"This Month",
-    moyasarFee:"Moyasar Fees (1.9%)", paid:"✓ Paid", pendingStatus:"⏳ Pending",
-    change:"Change", totalEmployees:"Total", online:"Online since",
-    lastSeen:"Last seen", active:"Active now",
-    newEmployee:"New Employee", fullName:"Full Name", email:"Email",
-    password:"Password", role:"Role", branch:"Branch", orders_count:"orders",
+    employees:"Employees", addEmployee:"+ Add Employee", onlineNow:"Online Now", ordersHandled:"Orders Handled",
+    totalEarned:"Total Earned", pendingPayout:"Pending", thisMonth:"This Month", connectedAccount:"Connected Account",
+    payoutHistory:"Payout History", download:"Download", thisMonthBreakdown:"This Month Breakdown",
+    grossRevenue:"Gross Revenue", moyasarFee:"Moyasar Fees (1.9%)", netPayout:"Net Payout",
+    paid:"✓ Paid", pendingStatus:"⏳ Pending", change:"Change", payment:"Payments",
+    totalEmployees:"Total", online:"Online since", lastSeen:"Last seen", active:"Active now",
   },
   ar: {
     dir:"rtl", font:"'Tajawal',sans-serif",
@@ -62,7 +62,7 @@ const T = {
     accept:"قبول", markReady:"جاهز", complete:"إتمام", reject:"رفض",
     whatsappDriver:"📱 واتساب السائق", total:"الإجمالي",
     addItem:"+ إضافة منتج", available:"متاح", off:"غير متاح",
-    stockMgmt:"إدارة المخزون", inStock:"متوفر", outOfStock:"نفد",
+    stockMgmt:"إدارة المخزون", inStock:"متوفر", outOfStock:"نفد", 
     lowStock:"منخفض", restock:"إعادة تخزين", totalItems:"إجمالي المنتجات",
     totalRevenue:"إجمالي الإيرادات", totalOrders:"إجمالي الطلبات", avgOrderValue:"متوسط قيمة الطلب",
     bestSelling:"🏆 الأكثر مبيعاً", orderTypes:"أنواع الطلبات", paymentMethods:"طرق الدفع",
@@ -85,12 +85,12 @@ const T = {
     open:"● مفتوح", closed:"○ مغلق", to:"إلى", allDay:"٢٤ ساعة", closed_day:"مغلق",
     name:"الاسم", cuisine:"نوع المطبخ", phone:"الجوال", pickupTime:"وقت الاستلام",
     copy:"نسخ", logout:"تسجيل الخروج",
-    totalEarned:"إجمالي الأرباح", pendingPayout:"قيد الانتظار", thisMonth:"هذا الشهر",
-    moyasarFee:"رسوم ميسر (1.9%)", paid:"✓ مدفوع", pendingStatus:"⏳ قيد الانتظار",
-    change:"تغيير", totalEmployees:"الإجمالي", online:"متصل منذ",
-    lastSeen:"آخر ظهور", active:"نشط الآن",
-    newEmployee:"موظف جديد", fullName:"الاسم الكامل", email:"البريد الإلكتروني",
-    password:"كلمة المرور", role:"الدور", branch:"الفرع", orders_count:"طلب",
+    employees:"الموظفون", addEmployee:"+ إضافة موظف", onlineNow:"متصل الآن", ordersHandled:"الطلبات المعالجة",
+    totalEarned:"إجمالي الأرباح", pendingPayout:"قيد الانتظار", thisMonth:"هذا الشهر", connectedAccount:"الحساب المرتبط",
+    payoutHistory:"سجل المدفوعات", download:"تحميل", thisMonthBreakdown:"تفاصيل هذا الشهر",
+    grossRevenue:"الإيرادات الإجمالية", moyasarFee:"رسوم ميسر (1.9%)", netPayout:"صافي الدفع",
+    paid:"✓ مدفوع", pendingStatus:"⏳ قيد الانتظار", change:"تغيير", payment:"المدفوعات",
+    totalEmployees:"الإجمالي", online:"متصل منذ", lastSeen:"آخر ظهور", active:"نشط الآن",
   }
 }
 
@@ -118,26 +118,8 @@ const PAYOUTS = [
   { id:3, date:"8 مايو 2026",  dateEn:"May 8, 2026",  amount:1240, status:"pending", ref:"TXN-88999" },
 ];
 
-const BRANCHES = [
-  { id:1, name:"Tahlia",   nameAr:"التحلية",  address:"Tahlia St, Jeddah" },
-  { id:2, name:"Corniche", nameAr:"الكورنيش", address:"Corniche Rd, Jeddah" },
-  { id:3, name:"Airport",  nameAr:"المطار",   address:"King Abdulaziz Airport" },
-  { id:4, name:"Andalus",  nameAr:"الأندلس",  address:"Andalus St, Jeddah" },
-];
-
 
 // ── SMALL COMPONENTS ──────────────────────────────────────────────────────────
-const inp = (extra={}) => ({ width:"100%", padding:"9px 13px", background:"#1a1a1a", border:"1px solid #2a2a2a", borderRadius:11, fontSize:13, color:"#fff", outline:"none", fontFamily:"inherit", boxSizing:"border-box", ...extra })
-
-function STitle({ title, action, onClick }) {
-  return (
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-      <div style={{ fontSize:22, fontWeight:900, letterSpacing:"-0.03em", color:"#fff" }}>{title}</div>
-      {action && <button onClick={onClick} style={{ padding:"9px 18px", background:R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{action}</button>}
-    </div>
-  )
-}
-
 function Card({ children, mb=14, extra={} }) {
   return <div style={{ background:"#111", border:"1px solid #1e1e1e", borderRadius:20, padding:22, marginBottom:mb, ...extra }}>{children}</div>
 }
@@ -156,7 +138,9 @@ function StatCard({ icon, label, value, color=R, trend, sub }) {
   );
 }
 
-
+function Card({ children, mb=14 }) {
+  return <div style={{ background:"#fff", borderRadius:20, padding:22, marginBottom:mb, border:"1px solid #f0f0f0", boxShadow:"0 2px 8px rgba(0,0,0,0.04)" }}>{children}</div>;
+}
 
 function CardTitle({ children }) {
   return <div style={{ fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em", color:"#aaa", marginBottom:14 }}>{children}</div>;
@@ -751,13 +735,12 @@ function SettingsPage({ restaurant, t, lang }) {
 }
 
 
-
 function EmployeesPage({ t, lang }) {
-  const [emps, setEmps] = useState([]);
+  const [emps] = useState(EMPLOYEES);
   const [showAdd, setShowAdd] = useState(false);
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><div style={{fontSize:22,fontWeight:900}}>Employees</div><button onClick={()=>setShowAdd(v=>!v)} style={{padding:"9px 18px",background:"#E03020",border:"none",borderRadius:11,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>+ Add Employee</button></div>
+      <STitle title={t.employees} action={t.addEmployee} onClick={()=>setShowAdd(v=>!v)}/>
       {showAdd&&(
         <Card>
           <CardTitle>{t.newEmployee}</CardTitle>
@@ -770,7 +753,7 @@ function EmployeesPage({ t, lang }) {
             <div><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.role}</div>
               <select style={inp()}><option>{lang==="ar"?"موظف":"Employee"}</option><option>{lang==="ar"?"مدير":"Manager"}</option></select></div>
             <div><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.branch}</div>
-              <select style={inp()}><option>Main Branch</option></select></div>
+              <select style={inp()}>{BRANCHES.map(b=><option key={b.id}>{lang==="ar"?b.nameAr:b.name}</option>)}</select></div>
           </div>
           <button style={{ padding:"9px 18px", background:R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"إضافة":"Add"}</button>
         </Card>
@@ -968,7 +951,7 @@ export default function OwnerDashboard() {
 
       {/* Content */}
       <div style={{ flex:1, overflowY:"auto", padding:"24px 28px", minHeight:"100vh" }}>
-        <div style={{ maxWidth:920, margin:"0 auto", animation:"fadeIn 0.25s ease" }}>
+        <div style={{ maxWidth:920, margin:"0 auto", animation:"fadeIn 0.25s ease" }} key={page+lang}>
           {page==="overview"  && <OverviewPage restaurant={restaurant} t={t} lang={lang}/>}
           {page==="orders"    && <OrdersPage restaurant={restaurant} t={t} lang={lang}/>}
           {page==="menu"      && <MenuPage restaurant={restaurant} t={t} role={role}/>}
@@ -977,23 +960,9 @@ export default function OwnerDashboard() {
           {page==="branches"  && <BranchesPage restaurant={restaurant} t={t} lang={lang}/>}
           {page==="reviews"   && <ReviewsPage restaurant={restaurant} t={t}/>}
           {page==="hours"     && <HoursPage t={t}/>}
-          {page==="employees" && <EmployeesPage t={t} lang={lang}/>}
-          {page==="payment"   && <PaymentPage t={t} lang={lang}/>}
           {page==="settings"  && <SettingsPage restaurant={restaurant} t={t} lang={lang}/>}
         </div>
       </div>
     </div>
   )
 }
-
-
-
-
-
-
-
-
-
-
-
-
