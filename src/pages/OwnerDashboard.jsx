@@ -120,6 +120,8 @@ const PAYOUTS = [
 
 
 // ── SMALL COMPONENTS ──────────────────────────────────────────────────────────
+const inp = (extra={}) => ({ width:"100%", padding:"9px 13px", background:"#1a1a1a", border:"1.5px solid #2a2a2a", borderRadius:11, fontSize:13, color:"#fff", outline:"none", fontFamily:"inherit", boxSizing:"border-box", ...extra });
+
 function Card({ children, mb=14, extra={} }) {
   return <div style={{ background:"#111", border:"1px solid #1e1e1e", borderRadius:20, padding:22, marginBottom:mb, ...extra }}>{children}</div>
 }
@@ -968,6 +970,7 @@ export default function OwnerDashboard() {
     </div>
   )
 }
+
 
 
 
