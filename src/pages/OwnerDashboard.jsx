@@ -755,7 +755,7 @@ function EmployeesPage({ t, lang }) {
             <div><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.role}</div>
               <select style={inp()}><option>{lang==="ar"?"موظف":"Employee"}</option><option>{lang==="ar"?"مدير":"Manager"}</option></select></div>
             <div><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.branch}</div>
-              <select style={inp()}>{BRANCHES.map(b=><option key={b.id}>{lang==="ar"?b.nameAr:b.name}</option>)}</select></div>
+              <select style={inp()}>{[{id:1,name:"Branch 1",nameAr:"��� 1"}].map(b=><option key={b.id}>{lang==="ar"?b.nameAr:b.name}</option>)}</select></div>
           </div>
           <button style={{ padding:"9px 18px", background:R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"إضافة":"Add"}</button>
         </Card>
@@ -970,6 +970,7 @@ export default function OwnerDashboard() {
     </div>
   )
 }
+
 
 
 
