@@ -138,9 +138,7 @@ function StatCard({ icon, label, value, color=R, trend, sub }) {
   );
 }
 
-function Card({ children, mb=14 }) {
-  return <div style={{ background:"#fff", borderRadius:20, padding:22, marginBottom:mb, border:"1px solid #f0f0f0", boxShadow:"0 2px 8px rgba(0,0,0,0.04)" }}>{children}</div>;
-}
+
 
 function CardTitle({ children }) {
   return <div style={{ fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em", color:"#aaa", marginBottom:14 }}>{children}</div>;
@@ -960,10 +958,14 @@ export default function OwnerDashboard() {
           {page==="branches"  && <BranchesPage restaurant={restaurant} t={t} lang={lang}/>}
           {page==="reviews"   && <ReviewsPage restaurant={restaurant} t={t}/>}
           {page==="hours"     && <HoursPage t={t}/>}
-          {page===\"employees\"  && <EmployeesPage restaurant={restaurant} t={t} lang={lang} role={role}/>}{page===\"payment\"    && <PaymentPage t={t} lang={lang}/>}{page===\"settings\"   && <SettingsPage restaurant={restaurant} t={t} lang={lang}/>}
+   {page==="employees"  && <EmployeesPage restaurant={restaurant} t={t} lang={lang} role={role}/>}
+   {page==="payment"    && <PaymentPage t={t} lang={lang}/>}
+          {page==="settings"   && <SettingsPage restaurant={restaurant} t={t} lang={lang}/>}
         </div>
       </div>
     </div>
   )
 }
+
+
 
