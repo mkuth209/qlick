@@ -753,7 +753,7 @@ function SettingsPage({ restaurant, t, lang }) {
 
 
 function EmployeesPage({ t, lang }) {
-  const [emps] = useState(EMPLOYEES);
+  const [emps, setEmps] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   return (
     <div>
@@ -985,6 +985,7 @@ export default function OwnerDashboard() {
     </div>
   )
 }
+
 
 
 
