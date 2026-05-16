@@ -734,63 +734,86 @@ function SettingsPage({ restaurant, t, lang }) {
 
 
 function EmployeesPage({ t, lang }) {
-  const [emps] = useState(EMPLOYEES);
-  const [showAdd, setShowAdd] = useState(false);
+ function EmployeesPage({ restaurant, t, lang, role }) {
+  const [emps, setEmps] = useState([])
+  const [showAdd, setShowAdd] = useState(false)
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [empRole, setEmpRole] = useState('employee')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!restaurant) return
+    supabase.from('staff').select('*').eq('restaurant_id', restaurant.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setEmps(data || []))
+  }, [restaurant])
+
+  const addEmployee = async () => {
+    if (!name || !email) { alert('Name and email required'); return }
+    setSaving(true)
+    const { error } = await supabase.from('staff').insert({
+      restaurant_id: restaurant.id,
+      full_name: name, phone, email, role: empRole, status: 'active',
+    })
+    if (error) { alert('Error: ' + error.message); setSaving(false); return }
+    const { data } = await supabase.from('staff').select('*').eq('restaurant_id', restaurant.id).order('created_at', { ascending: false })
+    setEmps(data || [])
+    setName(''); setPhone(''); setEmail(''); setEmpRole('employee')
+    setShowAdd(false)
+    setSaving(false)
+  }
+
+  const removeEmployee = async (id) => {
+    if (!window.confirm('Remove this employee?')) return
+    await supabase.from('staff').delete().eq('id', id)
+    setEmps(p => p.filter(e => e.id !== id))
+  }
+
+  const inpS = { width:'100%', padding:'9px 13px', background:'#1a1a1a', border:'1.5px solid #2a2a2a', borderRadius:11, fontSize:13, color:'#fff', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }
+
   return (
     <div>
-      <STitle title={t.employees} action={t.addEmployee} onClick={()=>setShowAdd(v=>!v)}/>
-      {showAdd&&(
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+        <div style={{ fontSize:22, fontWeight:900 }}>{t.employees}</div>
+        <button onClick={()=>setShowAdd(v=>!v)} style={{ padding:'9px 18px', background:R, border:'none', borderRadius:11, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer' }}>{t.addEmployee}</button>
+      </div>
+      {showAdd && (
         <Card>
-          <CardTitle>{t.newEmployee}</CardTitle>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-            {[[t.fullName,"Ahmed"],[t.phone,"+966 5X"],[t.email,"x@x.com"],[t.password,"••••••••"]].map(([l,ph])=>(
-              <div key={l}><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{l}</div><input placeholder={ph} type={l===t.password?"password":"text"} style={inp()}/></div>
-            ))}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+            <div><div style={{ fontSize:11, color:'#555', marginBottom:5 }}>Full Name *</div><input value={name} onChange={e=>setName(e.target.value)} placeholder="Ahmed Ali" style={inpS}/></div>
+            <div><div style={{ fontSize:11, color:'#555', marginBottom:5 }}>Phone</div><input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+966 5X" style={inpS}/></div>
+            <div><div style={{ fontSize:11, color:'#555', marginBottom:5 }}>Email *</div><input value={email} onChange={e=>setEmail(e.target.value)} placeholder="x@email.com" style={inpS}/></div>
+            <div><div style={{ fontSize:11, color:'#555', marginBottom:5 }}>Role</div>
+              <select value={empRole} onChange={e=>setEmpRole(e.target.value)} style={inpS}>
+                <option value="employee">Employee</option>
+                <option value="manager">Manager</option>
+              </select>
+            </div>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-            <div><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.role}</div>
-              <select style={inp()}><option>{lang==="ar"?"موظف":"Employee"}</option><option>{lang==="ar"?"مدير":"Manager"}</option></select></div>
-            <div><div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.branch}</div>
-              <select style={inp()}>{BRANCHES.map(b=><option key={b.id}>{lang==="ar"?b.nameAr:b.name}</option>)}</select></div>
+          <div style={{ display:'flex', gap:10 }}>
+            <button onClick={addEmployee} disabled={saving} style={{ padding:'10px 20px', background:saving?'#333':R, border:'none', borderRadius:11, color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer' }}>{saving?'Saving...':'Add Employee'}</button>
+            <button onClick={()=>setShowAdd(false)} style={{ padding:'10px 20px', background:'transparent', border:'1px solid #333', borderRadius:11, color:'#666', fontSize:13, cursor:'pointer' }}>Cancel</button>
           </div>
-          <button style={{ padding:"9px 18px", background:R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"إضافة":"Add"}</button>
         </Card>
       )}
-      <div style={{ display:"flex", gap:12, marginBottom:18 }}>
-        <StatCard icon="👥" label={t.totalEmployees} value={emps.length} color="#6366f1"/>
-        <StatCard icon="🟢" label={t.onlineNow} value={emps.filter(e=>e.status==="online").length} color="#10b981"/>
-        <StatCard icon="📦" label={t.ordersHandled} value={emps.reduce((s,e)=>s+e.handled,0)} color={R}/>
-      </div>
-      {emps.map(emp=>(
+      {emps.length === 0 ? (
+        <div style={{ textAlign:'center', padding:48, color:'#444', background:'#111', borderRadius:20, border:'1px solid #1e1e1e' }}>No employees yet!</div>
+      ) : emps.map(emp => (
         <Card key={emp.id} mb={10}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ position:"relative", flexShrink:0 }}>
-              <div style={{ width:44, height:44, borderRadius:"50%", background:`${emp.role==="manager"?"#0ea5e9":"#E03020"}20`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:21 }}>
-                {emp.role==="manager"?"🧑‍💼":"👷"}
-              </div>
-              <div style={{ position:"absolute", bottom:0, right:0, width:12, height:12, borderRadius:"50%", background:emp.status==="online"?"#10b981":"#d1d5db", border:"2px solid #fff" }}/>
-            </div>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:'50%', background:'#E0302020', display:'flex', alignItems:'center', justifyContent:'center', fontSize:21 }}>👷</div>
             <div style={{ flex:1 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:2 }}>
-                <div style={{ fontWeight:700, fontSize:14 }}>{lang==="ar"?emp.nameAr:emp.name}</div>
-                <span style={{ padding:"2px 7px", borderRadius:10, fontSize:10, fontWeight:700, background:emp.role==="manager"?"#dbeafe":"#f0f0f0", color:emp.role==="manager"?"#0ea5e9":"#888" }}>
-                  {emp.role==="manager"?(lang==="ar"?"مدير":"Manager"):(lang==="ar"?"موظف":"Employee")}
-                </span>
-              </div>
-              <div style={{ fontSize:11, color:"#aaa" }}>📍 {lang==="ar"?emp.bNameAr:emp.bName} · 📞 {emp.phone}</div>
-              <div style={{ fontSize:11, color:"#aaa", marginTop:1 }}>
-                {emp.status==="online"?`🟢 ${t.online} ${emp.login} · ${emp.handled} ${t.orders_count}`:`⚫ ${t.lastSeen}`}
-              </div>
+              <div style={{ fontWeight:700, fontSize:14, color:'#fff' }}>{emp.full_name}</div>
+              <div style={{ fontSize:11, color:'#555' }}>📞 {emp.phone||'—'} · ✉️ {emp.email}</div>
             </div>
-            <div style={{ display:"flex", gap:5 }}>
-              <button style={{ padding:"6px 11px", background:"#f8f8f8", border:"1px solid #f0f0f0", borderRadius:9, color:"#666", fontSize:11, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"تعديل":"Edit"}</button>
-              <button style={{ padding:"6px 11px", background:"#fee2e2", border:"1px solid #fecaca", borderRadius:9, color:"#ef4444", fontSize:11, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"حذف":"Remove"}</button>
-            </div>
+            <button onClick={()=>removeEmployee(emp.id)} style={{ padding:'6px 12px', background:'#fee2e210', border:'1px solid #ef444433', borderRadius:9, color:'#ef4444', fontSize:11, fontWeight:700, cursor:'pointer' }}>Remove</button>
           </div>
         </Card>
       ))}
     </div>
-  );
+  )
 }
 
 
@@ -964,4 +987,5 @@ export default function OwnerDashboard() {
     </div>
   )
 }
+
 
