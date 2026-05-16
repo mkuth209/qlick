@@ -43,6 +43,14 @@ const T = {
     wed:"Wednesday", thu:"Thursday", fri:"Friday",
     open:"● Open", closed:"○ Closed", to:"to", allDay:"24h", closed_day:"Closed",
     name:"Name", cuisine:"Cuisine", phone:"Phone", pickupTime:"Pickup Time",
+    copy:"Copy", logout:"Sign Out",
+    employees:"Employees", addEmployee:"+ Add Employee", onlineNow:"Online Now", ordersHandled:"Orders Handled",
+    totalEarned:"Total Earned", pendingPayout:"Pending", thisMonth:"This Month", connectedAccount:"Connected Account",
+    payoutHistory:"Payout History", download:"Download", thisMonthBreakdown:"This Month Breakdown",
+    grossRevenue:"Gross Revenue", moyasarFee:"Moyasar Fees (1.9%)", netPayout:"Net Payout",
+    paid:"✓ Paid", pendingStatus:"⏳ Pending", change:"Change", payment:"Payments",
+    totalEmployees:"Total", online:"Online since", lastSeen:"Last seen", active:"Active now",
+  },
   ar: {
     dir:"rtl", font:"'Tajawal',sans-serif",
     overview:"نظرة عامة", orders:"الطلبات", menu:"القائمة", stock:"المخزون",
@@ -130,7 +138,9 @@ function StatCard({ icon, label, value, color=R, trend, sub }) {
   );
 }
 
-
+function Card({ children, mb=14 }) {
+  return <div style={{ background:"#fff", borderRadius:20, padding:22, marginBottom:mb, border:"1px solid #f0f0f0", boxShadow:"0 2px 8px rgba(0,0,0,0.04)" }}>{children}</div>;
+}
 
 function CardTitle({ children }) {
   return <div style={{ fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em", color:"#aaa", marginBottom:14 }}>{children}</div>;
@@ -725,7 +735,7 @@ function SettingsPage({ restaurant, t, lang }) {
 }
 
 
-function EmployeesPage({ restaurant, t, lang, role }) {
+function EmployeesPage({ t, lang }) {
   const [emps] = useState(EMPLOYEES);
   const [showAdd, setShowAdd] = useState(false);
   return (
@@ -956,6 +966,3 @@ export default function OwnerDashboard() {
     </div>
   )
 }
-
-
-
