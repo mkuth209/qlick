@@ -50,6 +50,8 @@ const T = {
     grossRevenue:"Gross Revenue", moyasarFee:"Moyasar Fees (1.9%)", netPayout:"Net Payout",
     paid:"✓ Paid", pendingStatus:"⏳ Pending", change:"Change", payment:"Payments",
     totalEmployees:"Total", online:"Online since", lastSeen:"Last seen", active:"Active now",
+    newEmployee:"New Employee", fullName:"Full Name", email:"Email", password:"Password",
+    role:"Role", branch:"Branch", orders_count:"orders",
   },
   ar: {
     dir:"rtl", font:"'Tajawal',sans-serif",
@@ -91,6 +93,8 @@ const T = {
     grossRevenue:"الإيرادات الإجمالية", moyasarFee:"رسوم ميسر (1.9%)", netPayout:"صافي الدفع",
     paid:"✓ مدفوع", pendingStatus:"⏳ قيد الانتظار", change:"تغيير", payment:"المدفوعات",
     totalEmployees:"الإجمالي", online:"متصل منذ", lastSeen:"آخر ظهور", active:"نشط الآن",
+    newEmployee:"موظف جديد", fullName:"الاسم الكامل", email:"البريد الإلكتروني", password:"كلمة المرور",
+    role:"الدور", branch:"الفرع", orders_count:"طلب",
   }
 }
 
@@ -118,8 +122,26 @@ const PAYOUTS = [
   { id:3, date:"8 مايو 2026",  dateEn:"May 8, 2026",  amount:1240, status:"pending", ref:"TXN-88999" },
 ];
 
+const BRANCHES = [
+  { id:1, name:"Tahlia",   nameAr:"التحلية",  address:"Tahlia St, Jeddah" },
+  { id:2, name:"Corniche", nameAr:"الكورنيش", address:"Corniche Rd, Jeddah" },
+  { id:3, name:"Airport",  nameAr:"المطار",   address:"King Abdulaziz Airport" },
+  { id:4, name:"Andalus",  nameAr:"الأندلس",  address:"Andalus St, Jeddah" },
+];
+
 
 // ── SMALL COMPONENTS ──────────────────────────────────────────────────────────
+const inp = (extra={}) => ({ width:"100%", padding:"9px 13px", background:"#1a1a1a", border:"1px solid #2a2a2a", borderRadius:11, fontSize:13, color:"#fff", outline:"none", fontFamily:"inherit", boxSizing:"border-box", ...extra })
+
+function STitle({ title, action, onClick }) {
+  return (
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+      <div style={{ fontSize:22, fontWeight:900, letterSpacing:"-0.03em", color:"#fff" }}>{title}</div>
+      {action && <button onClick={onClick} style={{ padding:"9px 18px", background:R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{action}</button>}
+    </div>
+  )
+}
+
 function Card({ children, mb=14, extra={} }) {
   return <div style={{ background:"#111", border:"1px solid #1e1e1e", borderRadius:20, padding:22, marginBottom:mb, ...extra }}>{children}</div>
 }
@@ -958,6 +980,8 @@ export default function OwnerDashboard() {
           {page==="branches"  && <BranchesPage restaurant={restaurant} t={t} lang={lang}/>}
           {page==="reviews"   && <ReviewsPage restaurant={restaurant} t={t}/>}
           {page==="hours"     && <HoursPage t={t}/>}
+          {page==="employees" && <EmployeesPage t={t} lang={lang}/>}
+          {page==="payment"   && <PaymentPage t={t} lang={lang}/>}
           {page==="settings"  && <SettingsPage restaurant={restaurant} t={t} lang={lang}/>}
         </div>
       </div>
