@@ -968,7 +968,7 @@ export default function OwnerDashboard() {
 
       {/* Content */}
       <div style={{ flex:1, overflowY:"auto", padding:"24px 28px", minHeight:"100vh" }}>
-        <div style={{ maxWidth:920, margin:"0 auto", animation:"fadeIn 0.25s ease" }} key={page+lang}>
+        <div style={{ maxWidth:920, margin:"0 auto", animation:"fadeIn 0.25s ease" }} key={page}>
           {page==="overview"  && <OverviewPage restaurant={restaurant} t={t} lang={lang}/>}
           {page==="orders"    && <OrdersPage restaurant={restaurant} t={t} lang={lang}/>}
           {page==="menu"      && <MenuPage restaurant={restaurant} t={t} role={role}/>}
@@ -985,6 +985,7 @@ export default function OwnerDashboard() {
     </div>
   )
 }
+
 
 
 
