@@ -960,9 +960,10 @@ export default function OwnerDashboard() {
           {page==="branches"  && <BranchesPage restaurant={restaurant} t={t} lang={lang}/>}
           {page==="reviews"   && <ReviewsPage restaurant={restaurant} t={t}/>}
           {page==="hours"     && <HoursPage t={t}/>}
-          {page==="settings"  && <SettingsPage restaurant={restaurant} t={t} lang={lang}/>}
+          {page===\"employees\"  && <EmployeesPage restaurant={restaurant} t={t} lang={lang} role={role}/>}{page===\"payment\"    && <PaymentPage t={t} lang={lang}/>}{page===\"settings\"   && <SettingsPage restaurant={restaurant} t={t} lang={lang}/>}
         </div>
       </div>
     </div>
   )
 }
+
