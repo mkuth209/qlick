@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom' // Navigate kept for ProtectedAdmin
 import Landing from './pages/Landing.jsx'
 import AdminLogin from './pages/AdminLogin.jsx'
 import AdminPanel from './pages/AdminPanel.jsx'
@@ -15,17 +15,6 @@ function ProtectedAdmin({ children }) {
   return auth === 'true' ? children : <Navigate to="/admin/login" replace />
 }
 
-function ProtectedDashboard({ children }) {
-  const stored = sessionStorage.getItem('qlick_user')
-  if (!stored) return <Navigate to="login" replace />
-  try {
-    JSON.parse(stored)
-    return children
-  } catch (_) {
-    return <Navigate to="login" replace />
-  }
-}
-
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
@@ -36,7 +25,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin/new" element={<ProtectedAdmin><NewRestaurant /></ProtectedAdmin>} />
         <Route path="/admin/:id/edit" element={<ProtectedAdmin><EditRestaurant /></ProtectedAdmin>} />
         <Route path="/:id/login" element={<Login />} />
-        <Route path="/:id/dashboard" element={<ProtectedDashboard><OwnerDashboard /></ProtectedDashboard>} />
+        <Route path="/:id/dashboard" element={<OwnerDashboard />} />
         <Route path="/:id" element={<CustomerApp />} />
       </Routes>
     </BrowserRouter>
