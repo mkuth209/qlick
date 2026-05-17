@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
 // ── TRANSLATIONS ──────────────────────────────────────────────────────────────
@@ -147,8 +147,14 @@ const ORDER_STATUS = (t) => ({
 const TYPE_ICON = { pickup:"🥡", delivery:"🛵", "dine-in":"🪑" };
 const TYPE_LABEL = (t) => ({ pickup:t.pickup, delivery:t.delivery, "dine-in":t.dineIn });
 
-const NAV_IDS = ["overview","orders","menu","stock","analytics","employees","branches","reviews","hours","payment","settings"];
+const ROLE_NAV = {
+  owner:    ["overview","orders","menu","stock","analytics","employees","branches","reviews","hours","payment","settings"],
+  manager:  ["overview","orders","menu","stock","analytics","employees","branches","reviews","hours","settings"],
+  employee: ["orders","menu","stock"],
+};
 const NAV_ICONS = { overview:"📊",orders:"📦",menu:"🍽️",stock:"🗃️",analytics:"📈",employees:"👥",branches:"🏪",reviews:"⭐",hours:"🕐",payment:"💳",settings:"⚙️" };
+const ROLE_COLORS = { owner:"#7c3aed", manager:"#0ea5e9", employee:"#10b981" };
+const ROLE_ICONS  = { owner:"👑", manager:"🧑‍💼", employee:"👷" };
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 function timeAgo(dateStr, lang) {
@@ -794,20 +800,54 @@ function AnalyticsPage({ orders, menuItems, branches, weeklyRev, t, lang }) {
 
 function EmployeesPage({ staff, setStaff, branches, restaurantId, t, lang }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name:"", phone:"", email:"", role:"employee", branch_id:"" });
+  const [form, setForm] = useState({ name:"", phone:"", email:"", password:"", role:"employee", branch_id:"" });
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState("");
 
   const addEmp = async () => {
-    if (!form.name) return;
+    if (!form.name || !form.email || !form.password) { setAddError(lang==="ar"?"يرجى تعبئة الاسم والبريد وكلمة المرور":"Name, email and password are required"); return; }
+    setAdding(true); setAddError("");
+
+    // 1. Save current owner Supabase session so we can restore it after
+    const { data: { session: ownerSession } } = await supabase.auth.getSession();
+
+    // 2. Create Supabase Auth account for the new staff member
+    const { error: authErr } = await supabase.auth.signUp({
+      email: form.email.toLowerCase().trim(),
+      password: form.password,
+    });
+
+    // 3. Restore owner session immediately (signUp may replace the active session)
+    if (ownerSession) {
+      await supabase.auth.setSession({
+        access_token:  ownerSession.access_token,
+        refresh_token: ownerSession.refresh_token,
+      });
+    }
+
+    if (authErr && !authErr.message.includes("already registered")) {
+      setAddError(authErr.message);
+      setAdding(false);
+      return;
+    }
+
+    // 4. Insert staff DB record
     const { data, error } = await supabase.from("staff").insert({
-      name: form.name, phone: form.phone, email: form.email, role: form.role,
+      name: form.name, phone: form.phone,
+      email: form.email.toLowerCase().trim(),
+      role: form.role,
       branch_id: form.branch_id || branches[0]?.id || null,
       restaurant_id: restaurantId, status: "offline",
     }).select().single();
+
     if (!error && data) {
       setStaff(p => [...p, data]);
-      setForm({ name:"", phone:"", email:"", role:"employee", branch_id:"" });
+      setForm({ name:"", phone:"", email:"", password:"", role:"employee", branch_id:"" });
       setShowAdd(false);
+    } else if (error) {
+      setAddError(error.message);
     }
+    setAdding(false);
   };
 
   const removeEmp = async (id) => {
@@ -824,10 +864,10 @@ function EmployeesPage({ staff, setStaff, branches, restaurantId, t, lang }) {
         <Card>
           <CardTitle>{t.newEmployee}</CardTitle>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-            {[[t.fullName,"name","Ahmed"],[t.phone,"phone","+966 5X"],[t.email,"email","x@x.com"]].map(([label,key,ph])=>(
+            {[[t.fullName,"name","Ahmed","text"],[t.phone,"phone","+966 5X","tel"],[t.email,"email","x@x.com","email"],[t.password,"password","••••••••","password"]].map(([label,key,ph,type])=>(
               <div key={key}>
                 <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{label}</div>
-                <input placeholder={ph} value={form[key]} onChange={e=>setForm(p=>({...p,[key]:e.target.value}))} style={inp()}/>
+                <input type={type} placeholder={ph} value={form[key]} onChange={e=>setForm(p=>({...p,[key]:e.target.value}))} style={inp()}/>
               </div>
             ))}
           </div>
@@ -846,7 +886,10 @@ function EmployeesPage({ staff, setStaff, branches, restaurantId, t, lang }) {
               </select>
             </div>
           </div>
-          <button onClick={addEmp} style={{ padding:"9px 18px", background:R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"إضافة":"Add"}</button>
+          {addError&&<div style={{ background:"#fee2e2", border:"1px solid #fecaca", borderRadius:10, padding:"8px 12px", marginBottom:10, fontSize:12, color:"#ef4444", fontWeight:600 }}>❌ {addError}</div>}
+          <button onClick={addEmp} disabled={adding} style={{ padding:"9px 18px", background:adding?"#ccc":R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:adding?"not-allowed":"pointer" }}>
+            {adding?"⏳...":(lang==="ar"?"إضافة":"Add")}
+          </button>
         </Card>
       )}
       <div style={{ display:"flex", gap:12, marginBottom:18 }}>
@@ -1279,12 +1322,41 @@ function SettingsPage({ restaurant, setRestaurant, t, lang, slug }) {
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 export default function OwnerDashboard() {
   const { id: slug } = useParams();
+  const navigate = useNavigate();
   const [lang, setLang] = useState("en");
-  const [page, setPage] = useState("overview");
+  const [page, setPage] = useState(null); // will be set after role is known
   const [bf, setBf] = useState("all");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const t = T[lang];
   const dir = t.dir;
+
+  // ── AUTH ──────────────────────────────────────────────────────────────────
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem("qlick_user");
+    if (!stored) { navigate(`/${slug}/login`, { replace: true }); return; }
+    try {
+      const user = JSON.parse(stored);
+      if (user.slug !== slug) { navigate(`/${slug}/login`, { replace: true }); return; }
+      setCurrentUser(user);
+      setPage(ROLE_NAV[user.role]?.[0] || "orders");
+    } catch (_) {
+      navigate(`/${slug}/login`, { replace: true });
+    }
+  }, [slug, navigate]);
+
+  const role = currentUser?.role || "employee";
+  const nav  = ROLE_NAV[role] || ROLE_NAV.employee;
+
+  const logout = async () => {
+    if (currentUser) {
+      await supabase.from("staff").update({ status: "offline" }).eq("id", currentUser.id);
+    }
+    await supabase.auth.signOut();
+    sessionStorage.removeItem("qlick_user");
+    navigate(`/${slug}/login`, { replace: true });
+  };
 
   const [restaurant, setRestaurant] = useState(null);
   const [branches, setBranches] = useState([]);
@@ -1369,7 +1441,7 @@ export default function OwnerDashboard() {
   const pendingCount = orders.filter(o=>o.status==="pending").length;
   const navLabel = (id) => ({ overview:t.overview, orders:t.orders, menu:t.menu, stock:t.stock, analytics:t.analytics, employees:t.employees, branches:t.branches, reviews:t.reviews, hours:t.hours, payment:t.payment, settings:t.settings })[id]||id;
 
-  if (loading && !restaurant) {
+  if (!currentUser || !page) {
     return (
       <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:"#f5f5f7", fontFamily:"'DM Sans', sans-serif" }}>
         <div style={{ textAlign:"center" }}>
@@ -1393,7 +1465,7 @@ export default function OwnerDashboard() {
           </div>
           {sidebarOpen&&<div style={{ overflow:"hidden" }}>
             <div style={{ fontWeight:800, fontSize:13, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{restaurant?.name||"..."}</div>
-            <div style={{ fontSize:10, color:"#7c3aed", fontWeight:700 }}>👑 {lang==="ar"?"المالك":"Owner"}</div>
+            <div style={{ fontSize:10, color:ROLE_COLORS[role], fontWeight:700 }}>{ROLE_ICONS[role]} {currentUser?.name||""}</div>
           </div>}
         </div>
 
@@ -1407,7 +1479,7 @@ export default function OwnerDashboard() {
         )}
 
         <nav style={{ flex:1, padding:"9px 7px", overflowY:"auto" }}>
-          {NAV_IDS.map(id=>(
+          {nav.map(id=>(
             <button key={id} onClick={()=>setPage(id)} style={{ width:"100%", padding:"10px 11px", marginBottom:2, background:page===id?`${R}10`:"transparent", border:"none", borderRadius:11, color:page===id?R:"#888", fontSize:12, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:9, textAlign:dir==="rtl"?"right":"left", transition:"all 0.15s", position:"relative" }}>
               <span style={{ fontSize:16, flexShrink:0 }}>{NAV_ICONS[id]}</span>
               {sidebarOpen&&<span style={{ whiteSpace:"nowrap" }}>{navLabel(id)}</span>}
@@ -1418,11 +1490,14 @@ export default function OwnerDashboard() {
         </nav>
 
         <div style={{ padding:"8px 7px", borderTop:"1px solid #f0f0f0" }}>
-          <button onClick={()=>setLang(l=>l==="en"?"ar":"en")} style={{ width:"100%", padding:"8px 11px", background:"#f8f8f8", border:"1px solid #f0f0f0", borderRadius:11, color:"#555", fontSize:11, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+          <button onClick={()=>setLang(l=>l==="en"?"ar":"en")} style={{ width:"100%", padding:"8px 11px", background:"#f8f8f8", border:"1px solid #f0f0f0", borderRadius:11, color:"#555", fontSize:11, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
             <span>🌐</span>{sidebarOpen&&<span>{lang==="en"?"عربي":"English"}</span>}
           </button>
-          <button onClick={()=>window.open(`/${slug}`,"_blank")} style={{ width:"100%", padding:"8px 11px", background:`${R}10`, border:`1px solid ${R}30`, borderRadius:11, color:R, fontSize:11, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:8 }}>
+          <button onClick={()=>window.open(`/${slug}`,"_blank")} style={{ width:"100%", padding:"8px 11px", background:`${R}10`, border:`1px solid ${R}30`, borderRadius:11, color:R, fontSize:11, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
             <span>📱</span>{sidebarOpen&&<span>{t.customerApp}</span>}
+          </button>
+          <button onClick={logout} style={{ width:"100%", padding:"8px 11px", background:"#fee2e2", border:"1px solid #fecaca", borderRadius:11, color:"#ef4444", fontSize:11, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:8 }}>
+            <span>🚪</span>{sidebarOpen&&<span>{lang==="ar"?"تسجيل الخروج":"Logout"}</span>}
           </button>
         </div>
 
