@@ -1057,54 +1057,151 @@ function HoursPage({ t, lang }) {
   );
 }
 
-function PaymentPage({ t, lang }) {
-  const pendingAmt = PAYOUTS.find(p=>p.status==="pending")?.amount||0;
-  const paidAmt = PAYOUTS.filter(p=>p.status==="paid").reduce((s,p)=>s+p.amount,0);
+function PaymentPage({ restaurant, setRestaurant, orders, t, lang }) {
+  const [saved, setSaved] = useState(false);
+  const [form, setForm] = useState({
+    moyasar_public_key:  restaurant?.moyasar_public_key  || "",
+    moyasar_secret_key:  restaurant?.moyasar_secret_key  || "",
+    iban:                restaurant?.iban                || "",
+    bank_name:           restaurant?.bank_name           || "",
+  });
+  const [methods, setMethods] = useState({
+    apple_pay:  restaurant?.payment_methods?.apple_pay  ?? true,
+    mada:       restaurant?.payment_methods?.mada       ?? true,
+    stc_pay:    restaurant?.payment_methods?.stc_pay    ?? true,
+    cash:       restaurant?.payment_methods?.cash       ?? false,
+  });
+
+  useEffect(()=>{
+    if (restaurant) {
+      setForm({
+        moyasar_public_key: restaurant.moyasar_public_key || "",
+        moyasar_secret_key: restaurant.moyasar_secret_key || "",
+        iban:               restaurant.iban               || "",
+        bank_name:          restaurant.bank_name          || "",
+      });
+      setMethods({
+        apple_pay: restaurant.payment_methods?.apple_pay ?? true,
+        mada:      restaurant.payment_methods?.mada      ?? true,
+        stc_pay:   restaurant.payment_methods?.stc_pay   ?? true,
+        cash:      restaurant.payment_methods?.cash      ?? false,
+      });
+    }
+  }, [restaurant]);
+
+  const now = new Date();
+  const thisMonthStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const completedOrders = orders.filter(o=>o.status==="completed");
+  const totalEarned = completedOrders.reduce((s,o)=>s+(o.total||0),0);
+  const thisMonthGross = completedOrders.filter(o=>(o.created_at||"").startsWith(thisMonthStr)).reduce((s,o)=>s+(o.total||0),0);
+  const moyasarFeeAmt = +(thisMonthGross*0.019).toFixed(2);
+  const netPayout = +(thisMonthGross-moyasarFeeAmt).toFixed(2);
+
+  const saveSettings = async () => {
+    if (!restaurant) return;
+    const updates = { ...form, payment_methods: methods };
+    await supabase.from("restaurants").update(updates).eq("id", restaurant.id);
+    setRestaurant(p=>({...p, ...updates}));
+    setSaved(true);
+    setTimeout(()=>setSaved(false), 2000);
+  };
+
+  const isConnected = form.moyasar_public_key && form.iban;
+
   return (
     <div>
       <STitle title={t.payment}/>
-      <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:18 }}>
-        <StatCard icon="💰" label={t.totalEarned} value={`﷼${paidAmt.toLocaleString()}`} color="#10b981"/>
-        <StatCard icon="⏳" label={t.pendingPayout} value={`﷼${pendingAmt.toLocaleString()}`} color="#f59e0b"/>
-        <StatCard icon="📊" label={t.thisMonth} value="﷼7,960" trend={14} color={R}/>
-        <StatCard icon="💳" label="Moyasar" value="1.9%" color="#6366f1"/>
+
+      {/* Revenue summary */}
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:20 }}>
+        <StatCard icon="💰" label={t.totalEarned}   value={`﷼${totalEarned.toLocaleString()}`}    color="#10b981"/>
+        <StatCard icon="📊" label={t.thisMonth}     value={`﷼${thisMonthGross.toLocaleString()}`} color={R}/>
+        <StatCard icon="💸" label={t.netPayout}     value={`﷼${netPayout.toLocaleString()}`}      color="#6366f1"/>
       </div>
+
+      {/* This month breakdown */}
       <Card>
-        <CardTitle>{t.connectedAccount}</CardTitle>
-        <div style={{ display:"flex", alignItems:"center", gap:12, padding:13, background:"#f8f8f8", borderRadius:13 }}>
-          <div style={{ width:44, height:44, borderRadius:13, background:"#10b98120", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🏦</div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontWeight:700, fontSize:14 }}>{lang==="ar"?"بنك الراجحي":"Al Rajhi Bank"}</div>
-            <div style={{ fontSize:12, color:"#888" }}>IBAN: SA•• •••• •••• •••• 4521</div>
-            <div style={{ fontSize:11, color:"#10b981", marginTop:1 }}>✓ {lang==="ar"?"موثق عبر ميسر":"Verified via Moyasar"}</div>
-          </div>
-          <button style={{ padding:"7px 13px", background:`${R}10`, border:`1px solid ${R}30`, borderRadius:9, color:R, fontSize:12, fontWeight:700, cursor:"pointer" }}>{t.change}</button>
-        </div>
-      </Card>
-      <Card>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:13 }}>
-          <CardTitle>{t.payoutHistory}</CardTitle>
-          <button style={{ padding:"5px 11px", background:"#f8f8f8", border:"1px solid #f0f0f0", borderRadius:8, color:"#555", fontSize:11, fontWeight:700, cursor:"pointer" }}>{t.download}</button>
-        </div>
-        {PAYOUTS.map(p=>(
-          <div key={p.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:"1px solid #f8f8f8" }}>
-            <div><div style={{ fontWeight:700, fontSize:13 }}>{lang==="ar"?p.date:p.dateEn}</div><div style={{ fontSize:11, color:"#aaa" }}>{p.ref}</div></div>
-            <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-              <div style={{ fontWeight:800, fontSize:14 }}>﷼{p.amount.toLocaleString()}</div>
-              <span style={{ padding:"3px 9px", borderRadius:20, fontSize:10, fontWeight:700, background:p.status==="paid"?"#d1fae5":"#fef3c7", color:p.status==="paid"?"#10b981":"#d97706" }}>{p.status==="paid"?t.paid:t.pendingStatus}</span>
-            </div>
-          </div>
-        ))}
-      </Card>
-      <Card mb={0}>
         <CardTitle>{t.thisMonthBreakdown}</CardTitle>
-        {[[t.grossRevenue,"﷼8,120","#1a1a1a"],[t.moyasarFee,"−﷼154","#ef4444"],[t.netPayout,"﷼7,966",R]].map(([l,v,c],i)=>(
+        {[
+          [t.grossRevenue, `﷼${thisMonthGross.toLocaleString()}`, "#1a1a1a"],
+          [t.moyasarFee,   `−﷼${moyasarFeeAmt.toLocaleString()}`, "#ef4444"],
+          [t.netPayout,    `﷼${netPayout.toLocaleString()}`,       R],
+        ].map(([l,v,c],i)=>(
           <div key={l} style={{ display:"flex", justifyContent:"space-between", padding:"9px 0", borderBottom:i<2?"1px solid #f8f8f8":"none" }}>
             <span style={{ fontSize:13, color:i===2?"#1a1a1a":"#666", fontWeight:i===2?800:500 }}>{l}</span>
             <span style={{ fontSize:13, fontWeight:800, color:c }}>{v}</span>
           </div>
         ))}
+        {thisMonthGross===0&&<div style={{ textAlign:"center", padding:"16px 0", color:"#ccc", fontSize:12 }}>{lang==="ar"?"لا توجد مبيعات هذا الشهر":"No sales this month yet"}</div>}
       </Card>
+
+      {/* Moyasar setup */}
+      <Card>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <CardTitle>{lang==="ar"?"إعداد ميسر":"Moyasar Setup"}</CardTitle>
+          <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:isConnected?"#d1fae5":"#fef3c7", color:isConnected?"#10b981":"#d97706" }}>
+            {isConnected?(lang==="ar"?"✓ مفعّل":"✓ Connected"):(lang==="ar"?"غير مفعّل":"Not Connected")}
+          </span>
+        </div>
+        <div style={{ background:"#f0f7ff", border:"1px solid #bfdbfe", borderRadius:12, padding:"11px 14px", marginBottom:14, fontSize:12, color:"#3b82f6" }}>
+          💡 {lang==="ar"
+            ? "احصل على مفاتيح API من لوحة تحكم ميسر على moyasar.com"
+            : "Get your API keys from the Moyasar dashboard at moyasar.com"}
+        </div>
+        {[
+          [lang==="ar"?"المفتاح العام (Public Key)":"Public Key", "moyasar_public_key", "pk_live_..."],
+          [lang==="ar"?"المفتاح السري (Secret Key)":"Secret Key", "moyasar_secret_key", "sk_live_..."],
+        ].map(([label,key,ph])=>(
+          <div key={key} style={{ marginBottom:11 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{label}</div>
+            <input
+              value={form[key]} placeholder={ph}
+              onChange={e=>setForm(p=>({...p,[key]:e.target.value}))}
+              type={key==="moyasar_secret_key"?"password":"text"}
+              style={inp()}
+              onFocus={e=>{e.target.style.borderColor=R;e.target.style.background="#fff"}}
+              onBlur={e=>{e.target.style.borderColor="#f0f0f0";e.target.style.background="#f8f8f8"}}
+            />
+          </div>
+        ))}
+      </Card>
+
+      {/* Bank account */}
+      <Card>
+        <CardTitle>{t.connectedAccount}</CardTitle>
+        {[
+          [lang==="ar"?"اسم البنك":"Bank Name",  "bank_name",  lang==="ar"?"بنك الراجحي":"Al Rajhi Bank"],
+          ["IBAN",                                "iban",       "SA00 0000 0000 0000 0000 0000"],
+        ].map(([label,key,ph])=>(
+          <div key={key} style={{ marginBottom:11 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{label}</div>
+            <input
+              value={form[key]} placeholder={ph}
+              onChange={e=>setForm(p=>({...p,[key]:e.target.value}))}
+              style={inp()}
+              onFocus={e=>{e.target.style.borderColor=R;e.target.style.background="#fff"}}
+              onBlur={e=>{e.target.style.borderColor="#f0f0f0";e.target.style.background="#f8f8f8"}}
+            />
+          </div>
+        ))}
+      </Card>
+
+      {/* Payment methods */}
+      <Card>
+        <CardTitle>{t.paymentMethods}</CardTitle>
+        {[
+          ["apple_pay",  "💳 Apple Pay",          lang==="ar"?"ادفع بـ Apple Pay":"Pay with Apple Pay"],
+          ["mada",       "💳 Mada / مدى",          lang==="ar"?"بطاقات مدى":"Mada cards"],
+          ["stc_pay",    "📱 STC Pay",              lang==="ar"?"ادفع بـ STC Pay":"Pay with STC Pay"],
+          ["cash",       "💵 "+(lang==="ar"?"نقداً":"Cash"), lang==="ar"?"الدفع نقداً عند الاستلام":"Cash on delivery/pickup"],
+        ].map(([key,label,sub])=>(
+          <Tog key={key} label={label} sub={sub} value={methods[key]} onChange={v=>setMethods(p=>({...p,[key]:v}))}/>
+        ))}
+      </Card>
+
+      <button onClick={saveSettings} style={{ padding:"11px 24px", background:saved?"#10b981":R, border:"none", borderRadius:12, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", transition:"background 0.3s" }}>
+        {saved?t.saved:t.save}
+      </button>
     </div>
   );
 }
@@ -1346,7 +1443,7 @@ export default function OwnerDashboard() {
           {page==="branches"  &&<BranchesPage branches={enrichedBranches} setBranches={setBranches} orders={orders} staff={staff} restaurantId={restaurant?.id} t={t} lang={lang}/>}
           {page==="reviews"   &&<ReviewsPage reviews={reviews} t={t} lang={lang}/>}
           {page==="hours"     &&<HoursPage t={t} lang={lang}/>}
-          {page==="payment"   &&<PaymentPage t={t} lang={lang}/>}
+          {page==="payment"   &&<PaymentPage restaurant={restaurant} setRestaurant={setRestaurant} orders={orders} t={t} lang={lang}/>}
           {page==="settings"  &&<SettingsPage restaurant={restaurant} setRestaurant={setRestaurant} t={t} lang={lang} slug={slug}/>}
         </div>
       </div>
