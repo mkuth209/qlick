@@ -888,7 +888,10 @@ function EmployeesPage({ staff, setStaff, branches, restaurantId, t, lang }) {
   );
 }
 
-function BranchesPage({ branches, setBranches, orders, staff, t, lang }) {
+function BranchesPage({ branches, setBranches, orders, staff, restaurantId, t, lang }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name:"", name_ar:"", address:"" });
+
   const toggle = async (id) => {
     const b = branches.find(br=>br.id===id);
     const newStatus = b.status==="open"?"closed":"open";
@@ -896,9 +899,50 @@ function BranchesPage({ branches, setBranches, orders, staff, t, lang }) {
     setBranches(p=>p.map(br=>br.id===id?{...br,status:newStatus}:br));
   };
 
+  const addBranch = async () => {
+    if (!form.name) return;
+    const { data, error } = await supabase.from("branches").insert({
+      name: form.name,
+      name_ar: form.name_ar || form.name,
+      address: form.address,
+      status: "open",
+      restaurant_id: restaurantId,
+    }).select().single();
+    if (!error && data) {
+      setBranches(p => [...p, data]);
+      setForm({ name:"", name_ar:"", address:"" });
+      setShowAdd(false);
+    }
+  };
+
+  const deleteBranch = async (id) => {
+    await supabase.from("branches").delete().eq("id", id);
+    setBranches(p => p.filter(b => b.id !== id));
+  };
+
   return (
     <div>
-      <STitle title={t.branches}/>
+      <STitle title={t.branches} action={t.addBranch} onClick={()=>setShowAdd(v=>!v)}/>
+      {showAdd&&(
+        <Card>
+          <CardTitle>{lang==="ar"?"فرع جديد":"New Branch"}</CardTitle>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{lang==="ar"?"الاسم (إنجليزي)":"Name (English)"}</div>
+              <input placeholder="Tahlia" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} style={inp()}/>
+            </div>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{lang==="ar"?"الاسم (عربي)":"Name (Arabic)"}</div>
+              <input placeholder="التحلية" value={form.name_ar} onChange={e=>setForm(p=>({...p,name_ar:e.target.value}))} style={inp()}/>
+            </div>
+            <div style={{ gridColumn:"1/-1" }}>
+              <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.address}</div>
+              <input placeholder={lang==="ar"?"شارع التحلية، جدة":"Tahlia St, Jeddah"} value={form.address} onChange={e=>setForm(p=>({...p,address:e.target.value}))} style={inp()}/>
+            </div>
+          </div>
+          <button onClick={addBranch} style={{ padding:"9px 18px", background:R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"إضافة":"Add"}</button>
+        </Card>
+      )}
       {branches.map(b=>(
         <Card key={b.id} mb={12}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
@@ -917,6 +961,7 @@ function BranchesPage({ branches, setBranches, orders, staff, t, lang }) {
               </div>
             ))}
             <button style={{ padding:"9px 15px", background:`${R}10`, border:`1px solid ${R}30`, borderRadius:11, color:R, fontSize:12, fontWeight:700, cursor:"pointer" }}>{t.manage}</button>
+            <button onClick={()=>deleteBranch(b.id)} style={{ padding:"9px 12px", background:"#fee2e2", border:"1px solid #fecaca", borderRadius:11, color:"#ef4444", fontSize:12, fontWeight:700, cursor:"pointer" }}>🗑️</button>
           </div>
         </Card>
       ))}
@@ -1298,7 +1343,7 @@ export default function OwnerDashboard() {
           {page==="stock"     &&<StockPage menuItems={menuItems} setMenuItems={setMenuItems} t={t} lang={lang}/>}
           {page==="analytics" &&<AnalyticsPage orders={orders} menuItems={menuItems} branches={enrichedBranches} weeklyRev={weeklyRev} t={t} lang={lang}/>}
           {page==="employees" &&<EmployeesPage staff={staff} setStaff={setStaff} branches={branches} restaurantId={restaurant?.id} t={t} lang={lang}/>}
-          {page==="branches"  &&<BranchesPage branches={enrichedBranches} setBranches={setBranches} orders={orders} staff={staff} t={t} lang={lang}/>}
+          {page==="branches"  &&<BranchesPage branches={enrichedBranches} setBranches={setBranches} orders={orders} staff={staff} restaurantId={restaurant?.id} t={t} lang={lang}/>}
           {page==="reviews"   &&<ReviewsPage reviews={reviews} t={t} lang={lang}/>}
           {page==="hours"     &&<HoursPage t={t} lang={lang}/>}
           {page==="payment"   &&<PaymentPage t={t} lang={lang}/>}
