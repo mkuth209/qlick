@@ -17,8 +17,26 @@ export default function CustomerApp() {
   const [ordered, setOrdered] = useState(false)
   const [orderStatus, setOrderStatus] = useState(0)
 
+  // ── CUSTOMER AUTH ────────────────────────────────────────────────────────────
+  const [customerUser, setCustomerUser] = useState(null)
+  const [authSheet, setAuthSheet] = useState(false)
+  const [authMode, setAuthMode] = useState('login') // 'login' | 'signup'
+  const [authForm, setAuthForm] = useState({ name:'', phone:'', email:'', password:'' })
+  const [authLoading, setAuthLoading] = useState(false)
+  const [authError, setAuthError] = useState('')
+  const [pendingOrder, setPendingOrder] = useState(false)
+  const [customerOrders, setCustomerOrders] = useState([])
+
   const ar = lang === 'ar'
   const dir = ar ? 'rtl' : 'ltr'
+
+  // Load customer session from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('qlick_customer')
+    if (stored) {
+      try { setCustomerUser(JSON.parse(stored)) } catch (_) {}
+    }
+  }, [])
 
   useEffect(() => {
     const fetch = async () => {
@@ -32,6 +50,17 @@ export default function CustomerApp() {
     }
     fetch()
   }, [slug])
+
+  // Load customer's orders for this restaurant
+  useEffect(() => {
+    if (customerUser?.email && restaurant) {
+      supabase.from('orders').select('*')
+        .eq('restaurant_id', restaurant.id)
+        .eq('customer_email', customerUser.email)
+        .order('created_at', { ascending: false })
+        .then(({ data }) => setCustomerOrders(data || []))
+    }
+  }, [customerUser, restaurant])
 
   useEffect(() => {
     if (screen === 'splash') {
@@ -57,10 +86,6 @@ export default function CustomerApp() {
   const design = typeof restaurant.design === 'string' ? JSON.parse(restaurant.design) : (restaurant.design || {})
   const logoUrl = restaurant.logo_url || null
   const R = design.primary || '#E03020'
-  const BG = design.bg || '#ffffff'
-  const SURFACE = design.surface || '#f8f8f8'
-  const TEXT = design.text || '#1a1a1a'
-  const isDark = design.theme === 'dark'
   const categories = [...new Set(menu.map(m => m.category || 'General'))]
   const catItems = menu.filter(m => (m.category || 'General') === activeCat)
   const totalItems = cart.reduce((s, c) => s + c.qty, 0)
@@ -73,7 +98,6 @@ export default function CustomerApp() {
       return [...prev, { ...item, qty }]
     })
   }
-
   const increase = id => setCart(prev => prev.map(c => c.id === id ? { ...c, qty: c.qty + 1 } : c))
   const decrease = id => setCart(prev => {
     const item = prev.find(c => c.id === id)
@@ -81,14 +105,82 @@ export default function CustomerApp() {
     return prev.map(c => c.id === id ? { ...c, qty: c.qty - 1 } : c)
   })
 
-  const placeOrder = async () => {
+  // ── AUTH ACTIONS ─────────────────────────────────────────────────────────────
+  const openAuth = (mode = 'login') => {
+    setAuthMode(mode); setAuthError(''); setAuthSheet(true)
+  }
+
+  const doSignIn = async () => {
+    if (!authForm.email || !authForm.password) {
+      setAuthError(ar ? 'يرجى إدخال البريد وكلمة المرور' : 'Enter email and password')
+      return
+    }
+    setAuthLoading(true); setAuthError('')
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authForm.email.toLowerCase().trim(),
+      password: authForm.password,
+    })
+    if (error) { setAuthError(ar ? 'بريد أو كلمة مرور غير صحيحة' : 'Invalid email or password'); setAuthLoading(false); return }
+    const user = { email: authForm.email.toLowerCase().trim(), name: authForm.email.split('@')[0] }
+    // Try to get name from existing order or auth metadata
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (authUser?.user_metadata?.name) user.name = authUser.user_metadata.name
+    if (authUser?.user_metadata?.phone) user.phone = authUser.user_metadata.phone
+    localStorage.setItem('qlick_customer', JSON.stringify(user))
+    setCustomerUser(user)
+    setAuthSheet(false)
+    setAuthLoading(false)
+    setAuthForm({ name:'', phone:'', email:'', password:'' })
+    if (pendingOrder) { setPendingOrder(false); await submitOrder(user) }
+  }
+
+  const doSignUp = async () => {
+    if (!authForm.name || !authForm.email || !authForm.password) {
+      setAuthError(ar ? 'يرجى إدخال الاسم والبريد وكلمة المرور' : 'Name, email and password are required')
+      return
+    }
+    setAuthLoading(true); setAuthError('')
+    const { error } = await supabase.auth.signUp({
+      email: authForm.email.toLowerCase().trim(),
+      password: authForm.password,
+      options: { data: { name: authForm.name, phone: authForm.phone } },
+    })
+    if (error && !error.message.toLowerCase().includes('already registered')) {
+      setAuthError(error.message); setAuthLoading(false); return
+    }
+    const user = { email: authForm.email.toLowerCase().trim(), name: authForm.name, phone: authForm.phone }
+    localStorage.setItem('qlick_customer', JSON.stringify(user))
+    setCustomerUser(user)
+    setAuthSheet(false)
+    setAuthLoading(false)
+    setAuthForm({ name:'', phone:'', email:'', password:'' })
+    if (pendingOrder) { setPendingOrder(false); await submitOrder(user) }
+  }
+
+  const doSignOut = async () => {
+    await supabase.auth.signOut()
+    localStorage.removeItem('qlick_customer')
+    setCustomerUser(null)
+    setCustomerOrders([])
+  }
+
+  // ── ORDER ACTIONS ────────────────────────────────────────────────────────────
+  const placeOrder = () => {
     if (cart.length === 0) return
+    if (!customerUser) { setPendingOrder(true); openAuth('login'); return }
+    submitOrder(customerUser)
+  }
+
+  const submitOrder = async (user) => {
     await supabase.from('orders').insert({
       restaurant_id: restaurant.id,
       items: cart.map(c => ({ id: c.id, name: c.name, price: c.price, qty: c.qty })),
       total: totalPrice,
       status: 'pending',
       type: 'pickup',
+      customer_name:  user.name  || '',
+      customer_email: user.email || '',
+      customer_phone: user.phone || '',
     })
     setOrdered(true)
     setCartOpen(false)
@@ -96,12 +188,11 @@ export default function CustomerApp() {
     setTimeout(() => setOrderStatus(2), 7000)
   }
 
-  const TABS = [
-    { id:'home',    icon:'🏠', label:'Home',    labelAr:'الرئيسية' },
-    { id:'orders',  icon:'📦', label:'Orders',  labelAr:'طلباتي' },
-    { id:'rewards', icon:'🎁', label:'Rewards', labelAr:'المكافآت' },
-    { id:'account', icon:'👤', label:'Account', labelAr:'حسابي' },
-  ]
+  // ── INPUT STYLE ──────────────────────────────────────────────────────────────
+  const inp = {
+    width:'100%', padding:'12px 14px', background:'#f8f8f8', border:'1.5px solid #f0f0f0',
+    borderRadius:12, fontSize:14, outline:'none', fontFamily:'inherit', boxSizing:'border-box', color:'#1a1a1a',
+  }
 
   // ── SPLASH ──────────────────────────────────────────────────────────────────
   if (screen === 'splash') return (
@@ -109,8 +200,7 @@ export default function CustomerApp() {
       <style>{`@keyframes logoIn{0%{transform:scale(0.5);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}} @keyframes shimmer{0%,100%{opacity:0.4}50%{opacity:1}}`}</style>
       <div style={{ animation:'logoIn 0.8s cubic-bezier(0.34,1.56,0.64,1) both' }}>
         <div style={{ width:120, height:120, background:'rgba(255,255,255,0.15)', borderRadius:32, display:'flex', alignItems:'center', justifyContent:'center', fontSize:64, marginBottom:20, backdropFilter:'blur(10px)' }}>
-{logoUrl ? <img src={logoUrl} alt={restaurant.name} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:32}}/> : <span style={{fontSize:64}}>{restaurant.name}</span>}
-
+          {logoUrl ? <img src={logoUrl} alt={restaurant.name} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:32}}/> : <span style={{fontSize:64}}>{restaurant.emoji||'🍽️'}</span>}
         </div>
         <div style={{ textAlign:'center', color:'#fff', fontWeight:900, fontSize:28, letterSpacing:2 }}>{restaurant.name?.toUpperCase()}</div>
         {restaurant.tagline && <div style={{ textAlign:'center', color:'rgba(255,255,255,0.7)', fontSize:13, marginTop:4 }}>{restaurant.tagline}</div>}
@@ -126,7 +216,7 @@ export default function CustomerApp() {
     <div style={{ position:'fixed', inset:0, background:'#fff', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:32, fontFamily:'sans-serif' }}>
       <style>{`@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}`}</style>
       <div style={{ width:80, height:80, borderRadius:24, background:R, display:'flex', alignItems:'center', justifyContent:'center', fontSize:40, marginBottom:32, animation:'slideUp 0.5s ease both' }}>
-        {restaurant.name}
+        {restaurant.emoji||'🍽️'}
       </div>
       <div style={{ fontSize:22, fontWeight:700, color:'#1a1a1a', marginBottom:8, animation:'slideUp 0.5s 0.1s ease both' }}>Choose Language</div>
       <div style={{ fontSize:14, color:'#888', marginBottom:40, animation:'slideUp 0.5s 0.2s ease both' }}>اختر اللغة</div>
@@ -177,6 +267,69 @@ export default function CustomerApp() {
       </>
     )
   }
+
+  // ── AUTH SHEET ───────────────────────────────────────────────────────────────
+  const AuthSheet = () => (
+    <>
+      <div onClick={()=>{ setAuthSheet(false); setPendingOrder(false); }} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:400 }}/>
+      <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:430, background:'#fff', borderRadius:'24px 24px 0 0', zIndex:401, padding:'24px 24px 40px', fontFamily:'sans-serif' }} dir={dir}>
+        {/* Handle */}
+        <div style={{ width:40, height:4, borderRadius:2, background:'#e0e0e0', margin:'0 auto 20px' }}/>
+
+        {/* Mode toggle */}
+        <div style={{ display:'flex', background:'#f5f5f5', borderRadius:14, padding:4, marginBottom:22 }}>
+          {['login','signup'].map(m=>(
+            <button key={m} onClick={()=>{ setAuthMode(m); setAuthError(''); }} style={{ flex:1, padding:'10px 0', background:authMode===m?'#fff':'transparent', border:'none', borderRadius:11, fontSize:14, fontWeight:700, color:authMode===m?'#1a1a1a':'#aaa', cursor:'pointer', transition:'all 0.2s', boxShadow:authMode===m?'0 1px 4px rgba(0,0,0,0.08)':'none' }}>
+              {m==='login'?(ar?'تسجيل الدخول':'Sign In'):(ar?'إنشاء حساب':'Sign Up')}
+            </button>
+          ))}
+        </div>
+
+        {/* Sign Up extra fields */}
+        {authMode === 'signup' && (
+          <>
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:'#bbb', marginBottom:5 }}>{ar?'الاسم':'NAME'}</div>
+              <input value={authForm.name} onChange={e=>setAuthForm(p=>({...p,name:e.target.value}))} placeholder={ar?'اسمك الكامل':'Your name'} style={inp}
+                onFocus={e=>{e.target.style.borderColor=R}} onBlur={e=>{e.target.style.borderColor='#f0f0f0'}}/>
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:'#bbb', marginBottom:5 }}>{ar?'الجوال':'PHONE'}</div>
+              <input value={authForm.phone} onChange={e=>setAuthForm(p=>({...p,phone:e.target.value}))} placeholder="+966 5X XXX XXXX" style={inp} type="tel"
+                onFocus={e=>{e.target.style.borderColor=R}} onBlur={e=>{e.target.style.borderColor='#f0f0f0'}}/>
+            </div>
+          </>
+        )}
+
+        <div style={{ marginBottom:12 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'#bbb', marginBottom:5 }}>{ar?'البريد الإلكتروني':'EMAIL'}</div>
+          <input value={authForm.email} onChange={e=>setAuthForm(p=>({...p,email:e.target.value}))} placeholder="you@example.com" type="email" style={inp}
+            onFocus={e=>{e.target.style.borderColor=R}} onBlur={e=>{e.target.style.borderColor='#f0f0f0'}}/>
+        </div>
+        <div style={{ marginBottom:18 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'#bbb', marginBottom:5 }}>{ar?'كلمة المرور':'PASSWORD'}</div>
+          <input value={authForm.password} onChange={e=>setAuthForm(p=>({...p,password:e.target.value}))} placeholder="••••••••" type="password" style={inp}
+            onFocus={e=>{e.target.style.borderColor=R}} onBlur={e=>{e.target.style.borderColor='#f0f0f0'}}/>
+        </div>
+
+        {authError && (
+          <div style={{ background:'#fee2e2', border:'1px solid #fecaca', borderRadius:11, padding:'10px 13px', marginBottom:14, fontSize:13, color:'#ef4444', fontWeight:600 }}>
+            ❌ {authError}
+          </div>
+        )}
+
+        <button onClick={authMode==='login'?doSignIn:doSignUp} disabled={authLoading} style={{ width:'100%', padding:15, background:authLoading?'#ccc':R, border:'none', borderRadius:14, color:'#fff', fontSize:15, fontWeight:800, cursor:authLoading?'not-allowed':'pointer' }}>
+          {authLoading ? '⏳' : authMode==='login'?(ar?'دخول':'Sign In'):(ar?'إنشاء حساب':'Create Account')}
+        </button>
+
+        {pendingOrder && (
+          <div style={{ textAlign:'center', marginTop:14, fontSize:12, color:'#aaa' }}>
+            {ar?'سجّل دخولك لإتمام طلبك':'Sign in to complete your order'}
+          </div>
+        )}
+      </div>
+    </>
+  )
 
   // ── CART DRAWER ──────────────────────────────────────────────────────────────
   const CartDrawer = () => {
@@ -230,15 +383,47 @@ export default function CustomerApp() {
               <span style={{ color:R }}>﷼{totalPrice.toFixed(2)}</span>
             </div>
           </div>
+
+          {/* Show who is placing the order */}
+          {customerUser ? (
+            <div style={{ margin:'0 20px 16px', padding:'11px 14px', background:`${R}08`, borderRadius:12, display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:20 }}>👤</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a1a' }}>{customerUser.name}</div>
+                <div style={{ fontSize:11, color:'#888' }}>{customerUser.email}</div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ margin:'0 20px 16px', padding:'11px 14px', background:'#fef3c7', borderRadius:12, fontSize:13, color:'#92400e', fontWeight:600 }}>
+              ⚠️ {ar?'تحتاج لتسجيل الدخول لإتمام الطلب':'You need to sign in to place an order'}
+            </div>
+          )}
+
           <div style={{ padding:'0 20px 40px' }}>
             <button onClick={placeOrder} style={{ width:'100%', padding:16, background:R, border:'none', borderRadius:16, color:'#fff', fontSize:16, fontWeight:800, cursor:'pointer' }}>
-              🥡 {ar?'تأكيد الطلب':'Place Order'} · ﷼{totalPrice.toFixed(2)}
+              {!customerUser ? (ar?'تسجيل الدخول للطلب':'Sign In to Order') : `🥡 ${ar?'تأكيد الطلب':'Place Order'} · ﷼${totalPrice.toFixed(2)}`}
             </button>
           </div>
         </div>
       </>
     )
   }
+
+  // ── STATUS BADGE ─────────────────────────────────────────────────────────────
+  const statusStyle = (s) => {
+    if (s === 'completed') return { bg:'#d1fae5', color:'#10b981', label: ar?'مكتمل':'Done' }
+    if (s === 'preparing') return { bg:'#dbeafe', color:'#3b82f6', label: ar?'قيد التحضير':'Preparing' }
+    if (s === 'ready')     return { bg:'#fef3c7', color:'#d97706', label: ar?'جاهز':'Ready' }
+    if (s === 'rejected')  return { bg:'#fee2e2', color:'#ef4444', label: ar?'مرفوض':'Rejected' }
+    return { bg:'#f0f0f0', color:'#888', label: ar?'قيد الانتظار':'Pending' }
+  }
+
+  const TABS = [
+    { id:'home',    icon:'🏠', label:'Home',    labelAr:'الرئيسية' },
+    { id:'orders',  icon:'📦', label:'Orders',  labelAr:'طلباتي' },
+    { id:'rewards', icon:'🎁', label:'Rewards', labelAr:'المكافآت' },
+    { id:'account', icon:'👤', label:'Account', labelAr:'حسابي' },
+  ]
 
   // ── MAIN APP ─────────────────────────────────────────────────────────────────
   return (
@@ -257,9 +442,9 @@ export default function CustomerApp() {
       {/* Content */}
       <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column' }}>
 
+        {/* ── HOME ── */}
         {tab === 'home' && (
           <div style={{ paddingBottom:totalItems>0?160:90 }}>
-            {/* Category pills */}
             <div style={{ display:'flex', gap:8, padding:'14px 16px', overflowX:'auto', scrollbarWidth:'none', position:'sticky', top:0, background:'#fff', zIndex:10, borderBottom:'1px solid #f5f5f5' }}>
               {categories.map(cat => (
                 <button key={cat} onClick={()=>setActiveCat(cat)} style={{ flexShrink:0, padding:'8px 16px', borderRadius:20, border:'none', background:activeCat===cat?R:'#f5f5f5', color:activeCat===cat?'#fff':'#555', fontSize:13, fontWeight:600, cursor:'pointer', transition:'all 0.2s' }}>
@@ -267,8 +452,6 @@ export default function CustomerApp() {
                 </button>
               ))}
             </div>
-
-            {/* Menu items */}
             <div style={{ padding:16 }}>
               <div style={{ fontSize:18, fontWeight:800, marginBottom:14, color:'#1a1a1a' }}>{activeCat}</div>
               {catItems.length === 0 ? (
@@ -296,16 +479,53 @@ export default function CustomerApp() {
           </div>
         )}
 
+        {/* ── ORDERS ── */}
         {tab === 'orders' && (
           <div style={{ padding:'20px 16px 90px' }}>
             <div style={{ fontSize:20, fontWeight:800, marginBottom:20, color:'#1a1a1a' }}>{ar?'طلباتي':'My Orders'}</div>
-            <div style={{ textAlign:'center', padding:40, color:'#aaa' }}>
-              <div style={{ fontSize:40, marginBottom:12 }}>📦</div>
-              <div style={{ fontSize:14 }}>{ar?'لا توجد طلبات بعد':'No orders yet'}</div>
-            </div>
+            {!customerUser ? (
+              <div style={{ textAlign:'center', padding:'40px 20px' }}>
+                <div style={{ fontSize:48, marginBottom:16 }}>📦</div>
+                <div style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>{ar?'سجّل دخولك لعرض طلباتك':'Sign in to see your orders'}</div>
+                <div style={{ fontSize:13, color:'#888', marginBottom:24 }}>{ar?'جميع طلباتك في مكان واحد':'All your orders in one place'}</div>
+                <button onClick={()=>openAuth('login')} style={{ padding:'12px 28px', background:R, border:'none', borderRadius:14, color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer' }}>
+                  {ar?'تسجيل الدخول':'Sign In'}
+                </button>
+              </div>
+            ) : customerOrders.length === 0 ? (
+              <div style={{ textAlign:'center', padding:40, color:'#aaa' }}>
+                <div style={{ fontSize:40, marginBottom:12 }}>📦</div>
+                <div style={{ fontSize:14 }}>{ar?'لا توجد طلبات بعد':'No orders yet'}</div>
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {customerOrders.map(order => {
+                  const st = statusStyle(order.status)
+                  return (
+                    <div key={order.id} style={{ background:'#fff', borderRadius:16, padding:16, border:'1px solid #f0f0f0' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                        <div style={{ fontWeight:700, fontSize:13 }}>#{String(order.id).slice(-6).toUpperCase()}</div>
+                        <span style={{ padding:'4px 10px', borderRadius:20, fontSize:11, fontWeight:700, background:st.bg, color:st.color }}>{st.label}</span>
+                      </div>
+                      <div style={{ fontSize:12, color:'#888', marginBottom:8 }}>
+                        {new Date(order.created_at).toLocaleDateString(ar?'ar-SA':'en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}
+                      </div>
+                      {(order.items||[]).map((it,i)=>(
+                        <div key={i} style={{ fontSize:13, color:'#555', marginBottom:3 }}>{it.emoji||''} {it.name} × {it.qty}</div>
+                      ))}
+                      <div style={{ display:'flex', justifyContent:'space-between', marginTop:10, paddingTop:10, borderTop:'1px solid #f5f5f5' }}>
+                        <span style={{ fontSize:13, color:'#888' }}>{ar?'الإجمالي':'Total'}</span>
+                        <span style={{ fontWeight:800, color:R }}>﷼{order.total?.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 
+        {/* ── REWARDS ── */}
         {tab === 'rewards' && (
           <div style={{ padding:'20px 16px 90px' }}>
             <div style={{ fontSize:20, fontWeight:800, marginBottom:20, color:'#1a1a1a' }}>{ar?'المكافآت':'Rewards'}</div>
@@ -314,38 +534,64 @@ export default function CustomerApp() {
               <div style={{ fontSize:48, fontWeight:900, marginBottom:4 }}>0</div>
               <div style={{ fontSize:13, opacity:0.7 }}>{ar?'اطلب لتكسب نقاط':'Order to earn points'}</div>
             </div>
+            {!customerUser && (
+              <div style={{ textAlign:'center', padding:'16px 0' }}>
+                <button onClick={()=>openAuth('signup')} style={{ padding:'12px 28px', background:R, border:'none', borderRadius:14, color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer' }}>
+                  {ar?'إنشاء حساب لكسب نقاط':'Sign up to earn points'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
+        {/* ── ACCOUNT ── */}
         {tab === 'account' && (
           <div style={{ paddingBottom:90 }}>
             <div style={{ background:R, padding:'28px 20px 40px' }}>
               <div style={{ fontSize:18, fontWeight:700, color:'#fff', textAlign:'center' }}>{ar?'حسابي':'Account'}</div>
             </div>
             <div style={{ margin:'-24px 16px 0', background:'#fff', borderRadius:20, padding:20, display:'flex', alignItems:'center', gap:14, border:'1px solid #f0f0f0', boxShadow:'0 4px 20px rgba(0,0,0,0.08)' }}>
-              <div style={{ width:56, height:56, borderRadius:'50%', background:`${R}22`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:28 }}>👤</div>
-              <div>
-                <div style={{ fontWeight:700, fontSize:16 }}>{ar?'ضيف':'Guest'}</div>
-                <div style={{ fontSize:13, color:'#888' }}>{ar?'سجّل دخولك للمزيد':'Sign in for more features'}</div>
+              <div style={{ width:56, height:56, borderRadius:'50%', background:`${R}22`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:28 }}>
+                {customerUser ? '👤' : '🔒'}
               </div>
-            </div>
-            <div style={{ padding:'20px 16px 0' }}>
-              {[
-                ['📦', ar?'طلباتي':'My Orders', ''],
-                ['🎁', ar?'نقاطي':'My Points', '0 pts'],
-                ['📍', ar?'الفروع':'Branches', ''],
-                ['🌐', ar?'English':'عربي', ''],
-              ].map(([icon, label, sub]) => (
-                <button key={label} style={{ width:'100%', display:'flex', alignItems:'center', gap:14, padding:'14px 0', background:'transparent', border:'none', borderBottom:'1px solid #f5f5f5', cursor:'pointer', textAlign:'left' }}>
-                  <div style={{ width:40, height:40, borderRadius:12, background:'#f8f8f8', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>{icon}</div>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:600, fontSize:14, color:'#1a1a1a' }}>{label}</div>
-                    {sub && <div style={{ fontSize:12, color:'#888', marginTop:1 }}>{sub}</div>}
-                  </div>
-                  <span style={{ color:'#ccc', fontSize:18 }}>›</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:700, fontSize:16 }}>{customerUser ? customerUser.name : (ar?'ضيف':'Guest')}</div>
+                <div style={{ fontSize:13, color:'#888' }}>{customerUser ? customerUser.email : (ar?'سجّل دخولك للمزيد':'Sign in for more features')}</div>
+              </div>
+              {customerUser && (
+                <button onClick={doSignOut} style={{ padding:'7px 14px', background:'#fee2e2', border:'none', borderRadius:10, color:'#ef4444', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                  {ar?'خروج':'Sign Out'}
                 </button>
-              ))}
+              )}
             </div>
+
+            {!customerUser ? (
+              <div style={{ padding:'20px 16px 0', display:'flex', flexDirection:'column', gap:10 }}>
+                <button onClick={()=>openAuth('login')} style={{ width:'100%', padding:15, background:R, border:'none', borderRadius:14, color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer' }}>
+                  {ar?'تسجيل الدخول':'Sign In'}
+                </button>
+                <button onClick={()=>openAuth('signup')} style={{ width:'100%', padding:15, background:'#fff', border:`2px solid ${R}`, borderRadius:14, color:R, fontSize:15, fontWeight:700, cursor:'pointer' }}>
+                  {ar?'إنشاء حساب جديد':'Create Account'}
+                </button>
+              </div>
+            ) : (
+              <div style={{ padding:'20px 16px 0' }}>
+                {[
+                  ['📦', ar?'طلباتي':'My Orders', `${customerOrders.length} ${ar?'طلب':'orders'}`, ()=>setTab('orders')],
+                  ['🎁', ar?'نقاطي':'My Points', '0 pts', null],
+                  ['🌐', ar?'English':'عربي', '', ()=>setLang(l=>l==='en'?'ar':'en')],
+                ].map(([icon, label, sub, action]) => (
+                  <button key={label} onClick={action||undefined} style={{ width:'100%', display:'flex', alignItems:'center', gap:14, padding:'14px 0', background:'transparent', border:'none', borderBottom:'1px solid #f5f5f5', cursor:action?'pointer':'default', textAlign:'left' }}>
+                    <div style={{ width:40, height:40, borderRadius:12, background:'#f8f8f8', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>{icon}</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontWeight:600, fontSize:14, color:'#1a1a1a' }}>{label}</div>
+                      {sub && <div style={{ fontSize:12, color:'#888', marginTop:1 }}>{sub}</div>}
+                    </div>
+                    {action && <span style={{ color:'#ccc', fontSize:18 }}>›</span>}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -374,7 +620,7 @@ export default function CustomerApp() {
 
       {selectedItem && <ItemModal/>}
       {cartOpen && <CartDrawer/>}
+      {authSheet && <AuthSheet/>}
     </div>
   )
 }
-
