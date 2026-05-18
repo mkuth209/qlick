@@ -62,6 +62,10 @@ const T = {
     sat:"Saturday", sun:"Sunday", mon:"Monday", tue:"Tuesday", wed:"Wednesday", thu:"Thursday", fri:"Friday",
     to:"to", closed_day:"Closed", allDay:"24h",
     orders_count:"orders", size:"size", optionGroups:"option groups",
+    deliveryZones:"Delivery Zones", addZone:"+ Add Zone", noZones:"No zones yet",
+    minKm:"Min KM", maxKm:"Max KM", zoneFee:"Fee (SAR)", zoneMinOrder:"Min Order (SAR)",
+    free:"Free", branchLocation:"Branch Coordinates (for delivery distance)",
+    latLabel:"Latitude", lngLabel:"Longitude",
   },
   ar: {
     dir:"rtl", font:"'Tajawal', sans-serif",
@@ -122,6 +126,10 @@ const T = {
     sat:"السبت", sun:"الأحد", mon:"الاثنين", tue:"الثلاثاء", wed:"الأربعاء", thu:"الخميس", fri:"الجمعة",
     to:"إلى", closed_day:"مغلق", allDay:"٢٤ ساعة",
     orders_count:"طلب", size:"حجم", optionGroups:"مجموعة خيارات",
+    deliveryZones:"مناطق التوصيل", addZone:"+ إضافة منطقة", noZones:"لا توجد مناطق",
+    minKm:"الحد الأدنى (كم)", maxKm:"الحد الأقصى (كم)", zoneFee:"رسوم التوصيل", zoneMinOrder:"الحد الأدنى للطلب",
+    free:"مجاني", branchLocation:"إحداثيات الفرع (للتوصيل)",
+    latLabel:"خط العرض", lngLabel:"خط الطول",
   }
 };
 
@@ -931,9 +939,12 @@ function EmployeesPage({ staff, setStaff, branches, restaurantId, t, lang }) {
   );
 }
 
-function BranchesPage({ branches, setBranches, orders, staff, restaurantId, t, lang }) {
+function BranchesPage({ branches, setBranches, orders, staff, restaurantId, deliveryZones, setDeliveryZones, t, lang }) {
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name:"", name_ar:"", address:"" });
+  const [form, setForm] = useState({ name:"", name_ar:"", address:"", lat:"", lng:"" });
+  const [expandedZones, setExpandedZones] = useState({}); // branchId → bool
+  const [zoneForm, setZoneForm] = useState(null); // null | { branchId, min_km, max_km, fee, min_order }
+  const [zoneAdding, setZoneAdding] = useState(false);
 
   const toggle = async (id) => {
     const b = branches.find(br=>br.id===id);
@@ -948,12 +959,14 @@ function BranchesPage({ branches, setBranches, orders, staff, restaurantId, t, l
       name: form.name,
       name_ar: form.name_ar || form.name,
       address: form.address,
+      lat: form.lat ? parseFloat(form.lat) : null,
+      lng: form.lng ? parseFloat(form.lng) : null,
       status: "open",
       restaurant_id: restaurantId,
     }).select().single();
     if (!error && data) {
       setBranches(p => [...p, data]);
-      setForm({ name:"", name_ar:"", address:"" });
+      setForm({ name:"", name_ar:"", address:"", lat:"", lng:"" });
       setShowAdd(false);
     }
   };
@@ -963,13 +976,41 @@ function BranchesPage({ branches, setBranches, orders, staff, restaurantId, t, l
     setBranches(p => p.filter(b => b.id !== id));
   };
 
+  const openZoneForm = (branchId) => {
+    setZoneForm({ branchId, min_km:"0", max_km:"", fee:"0", min_order:"0" });
+    setExpandedZones(p => ({ ...p, [branchId]: true }));
+  };
+
+  const addZone = async () => {
+    if (!zoneForm || !zoneForm.max_km) return;
+    setZoneAdding(true);
+    const { data, error } = await supabase.from("delivery_zones").insert({
+      branch_id: zoneForm.branchId,
+      restaurant_id: restaurantId,
+      min_km: parseFloat(zoneForm.min_km) || 0,
+      max_km: parseFloat(zoneForm.max_km),
+      fee: parseFloat(zoneForm.fee) || 0,
+      min_order: parseFloat(zoneForm.min_order) || 0,
+    }).select().single();
+    if (!error && data) {
+      setDeliveryZones(p => [...p, data].sort((a,b)=>a.min_km-b.min_km));
+      setZoneForm(null);
+    }
+    setZoneAdding(false);
+  };
+
+  const deleteZone = async (id) => {
+    await supabase.from("delivery_zones").delete().eq("id", id);
+    setDeliveryZones(p => p.filter(z => z.id !== id));
+  };
+
   return (
     <div>
       <STitle title={t.branches} action={t.addBranch} onClick={()=>setShowAdd(v=>!v)}/>
       {showAdd&&(
         <Card>
           <CardTitle>{lang==="ar"?"فرع جديد":"New Branch"}</CardTitle>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
             <div>
               <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{lang==="ar"?"الاسم (إنجليزي)":"Name (English)"}</div>
               <input placeholder="Tahlia" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} style={inp()}/>
@@ -983,31 +1024,131 @@ function BranchesPage({ branches, setBranches, orders, staff, restaurantId, t, l
               <input placeholder={lang==="ar"?"شارع التحلية، جدة":"Tahlia St, Jeddah"} value={form.address} onChange={e=>setForm(p=>({...p,address:e.target.value}))} style={inp()}/>
             </div>
           </div>
+          {/* Coordinates for delivery distance calc */}
+          <div style={{ background:"#f8f8f8", borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#888", marginBottom:8 }}>📍 {t.branchLocation}</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.latLabel}</div>
+                <input type="number" step="any" placeholder="24.7136" value={form.lat} onChange={e=>setForm(p=>({...p,lat:e.target.value}))} style={inp()}/>
+              </div>
+              <div>
+                <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.lngLabel}</div>
+                <input type="number" step="any" placeholder="46.6753" value={form.lng} onChange={e=>setForm(p=>({...p,lng:e.target.value}))} style={inp()}/>
+              </div>
+            </div>
+            <div style={{ fontSize:10, color:"#bbb", marginTop:6 }}>
+              {lang==="ar"?"ابحث عن إحداثيات موقعك على Google Maps":"Find your coordinates on Google Maps → right-click → copy lat/lng"}
+            </div>
+          </div>
           <button onClick={addBranch} style={{ padding:"9px 18px", background:R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>{lang==="ar"?"إضافة":"Add"}</button>
         </Card>
       )}
-      {branches.map(b=>(
-        <Card key={b.id} mb={12}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
-            <div>
-              <div style={{ fontWeight:800, fontSize:15, marginBottom:1 }}>{lang==="ar"?(b.name_ar||b.name):b.name}</div>
-              <div style={{ fontSize:12, color:"#aaa" }}>📍 {b.address||"—"}</div>
-            </div>
-            <button onClick={()=>toggle(b.id)} style={{ padding:"6px 13px", borderRadius:20, border:"1.5px solid", borderColor:b.status==="open"?"#10b981":"#e8e8e8", background:b.status==="open"?"#d1fae5":"#f8f8f8", color:b.status==="open"?"#10b981":"#888", fontSize:12, fontWeight:700, cursor:"pointer" }}>
-              {b.status==="open"?t.open:t.closed}
-            </button>
-          </div>
-          <div style={{ display:"flex", gap:8 }}>
-            {[["📦",`${b.orders||0} ${t.orders_count}`],["💰",`﷼${(b.revenue||0).toLocaleString()}`],["👥",`${staff.filter(e=>e.branch_id===b.id).length} ${t.staff}`]].map(([icon,val])=>(
-              <div key={val} style={{ flex:1, background:"#f8f8f8", borderRadius:11, padding:"9px 12px", display:"flex", alignItems:"center", gap:7 }}>
-                <span style={{ fontSize:16 }}>{icon}</span><span style={{ fontWeight:700, fontSize:12 }}>{val}</span>
+
+      {branches.map(b=>{
+        const branchZones = deliveryZones.filter(z => z.branch_id === b.id);
+        const zonesOpen = expandedZones[b.id];
+        return (
+          <Card key={b.id} mb={12}>
+            {/* Branch header */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
+              <div>
+                <div style={{ fontWeight:800, fontSize:15, marginBottom:1 }}>{lang==="ar"?(b.name_ar||b.name):b.name}</div>
+                <div style={{ fontSize:12, color:"#aaa" }}>📍 {b.address||"—"}
+                  {b.lat&&b.lng&&<span style={{ marginLeft:6, color:"#10b981", fontSize:11 }}>✓ GPS</span>}
+                </div>
               </div>
-            ))}
-            <button style={{ padding:"9px 15px", background:`${R}10`, border:`1px solid ${R}30`, borderRadius:11, color:R, fontSize:12, fontWeight:700, cursor:"pointer" }}>{t.manage}</button>
-            <button onClick={()=>deleteBranch(b.id)} style={{ padding:"9px 12px", background:"#fee2e2", border:"1px solid #fecaca", borderRadius:11, color:"#ef4444", fontSize:12, fontWeight:700, cursor:"pointer" }}>🗑️</button>
-          </div>
-        </Card>
-      ))}
+              <button onClick={()=>toggle(b.id)} style={{ padding:"6px 13px", borderRadius:20, border:"1.5px solid", borderColor:b.status==="open"?"#10b981":"#e8e8e8", background:b.status==="open"?"#d1fae5":"#f8f8f8", color:b.status==="open"?"#10b981":"#888", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                {b.status==="open"?t.open:t.closed}
+              </button>
+            </div>
+
+            {/* Stats row */}
+            <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+              {[["📦",`${b.orders||0} ${t.orders_count}`],["💰",`﷼${(b.revenue||0).toLocaleString()}`],["👥",`${staff.filter(e=>e.branch_id===b.id).length} ${t.staff}`]].map(([icon,val])=>(
+                <div key={val} style={{ flex:1, background:"#f8f8f8", borderRadius:11, padding:"9px 12px", display:"flex", alignItems:"center", gap:7 }}>
+                  <span style={{ fontSize:16 }}>{icon}</span><span style={{ fontWeight:700, fontSize:12 }}>{val}</span>
+                </div>
+              ))}
+              <button onClick={()=>deleteBranch(b.id)} style={{ padding:"9px 12px", background:"#fee2e2", border:"1px solid #fecaca", borderRadius:11, color:"#ef4444", fontSize:12, fontWeight:700, cursor:"pointer" }}>🗑️</button>
+            </div>
+
+            {/* ── Delivery Zones ── */}
+            <div style={{ borderTop:"1px solid #f0f0f0", paddingTop:12 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <button onClick={()=>setExpandedZones(p=>({...p,[b.id]:!p[b.id]}))} style={{ background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:6, padding:0 }}>
+                  <span style={{ fontSize:14 }}>🚚</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#555" }}>{t.deliveryZones}</span>
+                  <span style={{ fontSize:11, color:R, fontWeight:700, background:`${R}10`, padding:"2px 7px", borderRadius:10 }}>{branchZones.length}</span>
+                  <span style={{ fontSize:11, color:"#ccc" }}>{zonesOpen?"▲":"▼"}</span>
+                </button>
+                <button onClick={()=>openZoneForm(b.id)} style={{ padding:"5px 12px", background:R, border:"none", borderRadius:9, color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer" }}>
+                  {t.addZone}
+                </button>
+              </div>
+
+              {zonesOpen && (
+                <div>
+                  {/* Zone list */}
+                  {branchZones.length === 0 && (
+                    <div style={{ fontSize:12, color:"#bbb", padding:"8px 0" }}>{t.noZones}</div>
+                  )}
+                  {branchZones.map((zone, i) => (
+                    <div key={zone.id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", background:i%2===0?"#f8f8f8":"#fff", borderRadius:9, marginBottom:4 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <span style={{ fontSize:12, color:"#555", fontWeight:600 }}>
+                          {zone.min_km}–{zone.max_km} km
+                        </span>
+                        <span style={{ fontSize:13, fontWeight:800, color:zone.fee===0?"#10b981":R }}>
+                          {zone.fee===0?t.free:`﷼${zone.fee}`}
+                        </span>
+                        {zone.min_order>0&&<span style={{ fontSize:11, color:"#aaa" }}>min ﷼{zone.min_order}</span>}
+                      </div>
+                      <button onClick={()=>deleteZone(zone.id)} style={{ padding:"4px 9px", background:"#fee2e2", border:"none", borderRadius:7, color:"#ef4444", fontSize:11, fontWeight:700, cursor:"pointer" }}>✕</button>
+                    </div>
+                  ))}
+
+                  {/* Add zone form */}
+                  {zoneForm?.branchId === b.id && (
+                    <div style={{ background:"#f0f7ff", border:"1px solid #bfdbfe", borderRadius:12, padding:"14px", marginTop:10 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:"#3b82f6", marginBottom:10 }}>
+                        {lang==="ar"?"منطقة توصيل جديدة":"New Delivery Zone"}
+                      </div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, marginBottom:10 }}>
+                        {[
+                          [t.minKm,"min_km","0"],
+                          [t.maxKm,"max_km","15"],
+                          [t.zoneFee,"fee","10"],
+                          [t.zoneMinOrder,"min_order","0"],
+                        ].map(([label,key,ph])=>(
+                          <div key={key}>
+                            <div style={{ fontSize:10, fontWeight:700, color:"#888", marginBottom:3 }}>{label}</div>
+                            <input
+                              type="number" min="0" step="0.5"
+                              placeholder={ph}
+                              value={zoneForm[key]}
+                              onChange={e=>setZoneForm(p=>({...p,[key]:e.target.value}))}
+                              style={{ ...inp(), padding:"7px 10px", fontSize:13 }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <button onClick={addZone} disabled={zoneAdding||!zoneForm.max_km} style={{ padding:"8px 18px", background:zoneAdding||!zoneForm.max_km?"#ccc":R, border:"none", borderRadius:9, color:"#fff", fontSize:12, fontWeight:700, cursor:zoneAdding||!zoneForm.max_km?"not-allowed":"pointer" }}>
+                          {zoneAdding?"⏳":(lang==="ar"?"حفظ":"Save")}
+                        </button>
+                        <button onClick={()=>setZoneForm(null)} style={{ padding:"8px 14px", background:"#f0f0f0", border:"none", borderRadius:9, color:"#666", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                          {lang==="ar"?"إلغاء":"Cancel"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Card>
+        );
+      })}
       {!branches.length&&<div style={{ textAlign:"center", padding:50, color:"#ccc", fontSize:13 }}>{lang==="ar"?"لا توجد فروع":"No branches"}</div>}
     </div>
   );
@@ -1364,6 +1505,7 @@ export default function OwnerDashboard() {
   const [menuItems, setMenuItems] = useState([]);
   const [staff, setStaff] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [deliveryZones, setDeliveryZones] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(()=>{
@@ -1391,12 +1533,14 @@ export default function OwnerDashboard() {
       supabase.from("menu_items").select("*").eq("restaurant_id", rid),
       supabase.from("staff").select("*").eq("restaurant_id", rid),
       supabase.from("reviews").select("*").eq("restaurant_id", rid).order("created_at",{ascending:false}),
-    ]).then(([{data:bData},{data:oData},{data:mData},{data:sData},{data:rData}])=>{
+      supabase.from("delivery_zones").select("*").eq("restaurant_id", rid).order("min_km",{ascending:true}),
+    ]).then(([{data:bData},{data:oData},{data:mData},{data:sData},{data:rData},{data:dzData}])=>{
       setBranches(bData||[]);
       setOrders(oData||[]);
       setMenuItems((mData||[]).map(item=>({...item, alert:item.low_stock_alert??10, sizes:item.sizes||[], options:item.options||[]})));
       setStaff(sData||[]);
       setReviews(rData||[]);
+      setDeliveryZones(dzData||[]);
       setLoading(false);
     });
 
@@ -1515,7 +1659,7 @@ export default function OwnerDashboard() {
           {page==="stock"     &&<StockPage menuItems={menuItems} setMenuItems={setMenuItems} t={t} lang={lang}/>}
           {page==="analytics" &&<AnalyticsPage orders={orders} menuItems={menuItems} branches={enrichedBranches} weeklyRev={weeklyRev} t={t} lang={lang}/>}
           {page==="employees" &&<EmployeesPage staff={staff} setStaff={setStaff} branches={branches} restaurantId={restaurant?.id} t={t} lang={lang}/>}
-          {page==="branches"  &&<BranchesPage branches={enrichedBranches} setBranches={setBranches} orders={orders} staff={staff} restaurantId={restaurant?.id} t={t} lang={lang}/>}
+          {page==="branches"  &&<BranchesPage branches={enrichedBranches} setBranches={setBranches} orders={orders} staff={staff} restaurantId={restaurant?.id} deliveryZones={deliveryZones} setDeliveryZones={setDeliveryZones} t={t} lang={lang}/>}
           {page==="reviews"   &&<ReviewsPage reviews={reviews} t={t} lang={lang}/>}
           {page==="hours"     &&<HoursPage t={t} lang={lang}/>}
           {page==="payment"   &&<PaymentPage restaurant={restaurant} setRestaurant={setRestaurant} orders={orders} t={t} lang={lang}/>}

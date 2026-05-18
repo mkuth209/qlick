@@ -2,10 +2,21 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
+// ── Haversine distance (km) between two lat/lng points ───────────────────────
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+}
+
 export default function CustomerApp() {
   const { id: slug } = useParams()
   const [restaurant, setRestaurant] = useState(null)
   const [menu, setMenu] = useState([])
+  const [branches, setBranches] = useState([])
+  const [deliveryZones, setDeliveryZones] = useState([])
   const [loading, setLoading] = useState(true)
   const [screen, setScreen] = useState('splash') // splash | lang | main
   const [lang, setLang] = useState('en')
@@ -16,6 +27,12 @@ export default function CustomerApp() {
   const [activeCat, setActiveCat] = useState('')
   const [ordered, setOrdered] = useState(false)
   const [orderStatus, setOrderStatus] = useState(0)
+
+  // ── ORDER TYPE & DELIVERY ────────────────────────────────────────────────────
+  const [orderType, setOrderType] = useState('pickup') // 'pickup' | 'delivery'
+  const [deliveryStep, setDeliveryStep] = useState('idle') // 'idle' | 'locating' | 'done' | 'error'
+  const [customerCoords, setCustomerCoords] = useState(null) // { lat, lng }
+  const [deliveryResult, setDeliveryResult] = useState(null) // { branch, zone, fee, distance } | null
 
   // ── CUSTOMER AUTH ────────────────────────────────────────────────────────────
   const [customerUser, setCustomerUser] = useState(null)
@@ -43,8 +60,14 @@ export default function CustomerApp() {
       const { data: rest } = await supabase.from('restaurants').select('*').eq('slug', slug).single()
       if (!rest) { setLoading(false); return }
       setRestaurant(rest)
-      const { data: items } = await supabase.from('menu_items').select('*').eq('restaurant_id', rest.id).eq('available', true).order('category')
+      const [{ data: items }, { data: br }, { data: dz }] = await Promise.all([
+        supabase.from('menu_items').select('*').eq('restaurant_id', rest.id).eq('available', true).order('category'),
+        supabase.from('branches').select('id,name,name_ar,lat,lng,status').eq('restaurant_id', rest.id),
+        supabase.from('delivery_zones').select('*').eq('restaurant_id', rest.id).order('min_km', { ascending: true }),
+      ])
       setMenu(items || [])
+      setBranches(br || [])
+      setDeliveryZones(dz || [])
       if (items && items.length > 0) setActiveCat(items[0].category || 'General')
       setLoading(false)
     }
@@ -89,7 +112,9 @@ export default function CustomerApp() {
   const categories = [...new Set(menu.map(m => m.category || 'General'))]
   const catItems = menu.filter(m => (m.category || 'General') === activeCat)
   const totalItems = cart.reduce((s, c) => s + c.qty, 0)
-  const totalPrice = cart.reduce((s, c) => s + c.price * c.qty, 0)
+  const subtotal = cart.reduce((s, c) => s + c.price * c.qty, 0)
+  const deliveryFee = orderType === 'delivery' && deliveryResult?.fee ? deliveryResult.fee : 0
+  const totalPrice = subtotal + deliveryFee
 
   const addToCart = (item, qty = 1) => {
     setCart(prev => {
@@ -164,6 +189,70 @@ export default function CustomerApp() {
     setCustomerOrders([])
   }
 
+  // ── DELIVERY LOGIC ───────────────────────────────────────────────────────────
+  const detectLocation = () => {
+    if (!navigator.geolocation) {
+      setDeliveryStep('error')
+      setDeliveryResult({ error: ar ? 'جهازك لا يدعم تحديد الموقع' : 'Geolocation not supported' })
+      return
+    }
+    setDeliveryStep('locating')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords
+        setCustomerCoords({ lat, lng })
+        calcDelivery(lat, lng)
+      },
+      () => {
+        setDeliveryStep('error')
+        setDeliveryResult({ error: ar ? 'تعذّر تحديد موقعك. يرجى السماح بالوصول للموقع.' : 'Could not get your location. Please allow location access.' })
+      },
+      { timeout: 10000 }
+    )
+  }
+
+  const calcDelivery = (lat, lng) => {
+    // Branches with coordinates
+    const geoBranches = branches.filter(b => b.lat && b.lng && b.status === 'open')
+    if (geoBranches.length === 0) {
+      // No GPS branches — just show all zones (flat fee, no distance)
+      const allZones = deliveryZones
+      if (allZones.length === 0) {
+        setDeliveryStep('error')
+        setDeliveryResult({ error: ar ? 'التوصيل غير متاح حالياً' : 'Delivery not available' })
+        return
+      }
+      setDeliveryStep('done')
+      setDeliveryResult({ branch: null, zone: allZones[0], fee: allZones[0].fee, distance: null })
+      return
+    }
+    // Find nearest branch
+    let nearest = null, minDist = Infinity
+    geoBranches.forEach(b => {
+      const d = haversine(lat, lng, parseFloat(b.lat), parseFloat(b.lng))
+      if (d < minDist) { minDist = d; nearest = b }
+    })
+    // Find matching zone for that branch
+    const branchZones = deliveryZones.filter(z => z.branch_id === nearest.id)
+    const zone = branchZones.find(z => minDist >= z.min_km && minDist < z.max_km)
+    if (!zone) {
+      setDeliveryStep('error')
+      setDeliveryResult({ error: ar ? `أنت خارج نطاق التوصيل (${minDist.toFixed(1)} كم من أقرب فرع)` : `Outside delivery range (${minDist.toFixed(1)} km from nearest branch)` })
+      return
+    }
+    setDeliveryStep('done')
+    setDeliveryResult({ branch: nearest, zone, fee: zone.fee, distance: minDist })
+  }
+
+  const switchOrderType = (type) => {
+    setOrderType(type)
+    if (type === 'pickup') {
+      setDeliveryStep('idle')
+      setDeliveryResult(null)
+      setCustomerCoords(null)
+    }
+  }
+
   // ── ORDER ACTIONS ────────────────────────────────────────────────────────────
   const placeOrder = () => {
     if (cart.length === 0) return
@@ -172,12 +261,15 @@ export default function CustomerApp() {
   }
 
   const submitOrder = async (user) => {
+    const fee = orderType === 'delivery' ? (deliveryResult?.fee || 0) : 0
     await supabase.from('orders').insert({
       restaurant_id: restaurant.id,
+      branch_id: deliveryResult?.branch?.id || null,
       items: cart.map(c => ({ id: c.id, name: c.name, price: c.price, qty: c.qty })),
-      total: totalPrice,
+      total: totalPrice + fee,
+      delivery_fee: fee,
       status: 'pending',
-      type: 'pickup',
+      type: orderType,
       customer_name:  user.name  || '',
       customer_email: user.email || '',
       customer_phone: user.phone || '',
@@ -377,7 +469,82 @@ export default function CustomerApp() {
               </div>
             ))}
           </div>
-          <div style={{ padding:'16px 20px', background:'#f8f8f8', margin:'16px 20px', borderRadius:16 }}>
+          {/* ── Order type toggle ── */}
+          <div style={{ display:'flex', background:'#f5f5f5', borderRadius:14, padding:4, margin:'16px 20px 0' }}>
+            {[['pickup', ar?'🥡 استلام':'🥡 Pickup'], ['delivery', ar?'🛵 توصيل':'🛵 Delivery']].map(([type, label]) => (
+              <button key={type} onClick={()=>switchOrderType(type)} style={{ flex:1, padding:'10px 0', background:orderType===type?'#fff':'transparent', border:'none', borderRadius:11, fontSize:14, fontWeight:700, color:orderType===type?'#1a1a1a':'#aaa', cursor:'pointer', transition:'all 0.2s', boxShadow:orderType===type?'0 1px 4px rgba(0,0,0,0.08)':'none' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Delivery location ── */}
+          {orderType === 'delivery' && (
+            <div style={{ margin:'12px 20px 0', padding:'14px', background:'#f8f8f8', borderRadius:14 }}>
+              {deliveryStep === 'idle' && (
+                <button onClick={detectLocation} style={{ width:'100%', padding:'12px 0', background:R, border:'none', borderRadius:12, color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer' }}>
+                  📍 {ar?'تحديد موقعي (GPS)':'Detect My Location (GPS)'}
+                </button>
+              )}
+              {deliveryStep === 'locating' && (
+                <div style={{ textAlign:'center', fontSize:13, color:'#888', padding:'8px 0' }}>
+                  ⏳ {ar?'جاري تحديد موقعك...':'Detecting your location...'}
+                </div>
+              )}
+              {deliveryStep === 'done' && deliveryResult && (
+                <div>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#10b981' }}>
+                      ✓ {ar?'تم تحديد الموقع':'Location found'}
+                      {deliveryResult.distance != null && <span style={{ color:'#888', fontWeight:400, fontSize:12 }}> · {deliveryResult.distance.toFixed(1)} km</span>}
+                    </div>
+                    <button onClick={()=>{ setDeliveryStep('idle'); setDeliveryResult(null); }} style={{ fontSize:11, color:'#aaa', background:'none', border:'none', cursor:'pointer' }}>
+                      {ar?'تغيير':'Change'}
+                    </button>
+                  </div>
+                  {deliveryResult.branch && <div style={{ fontSize:12, color:'#888' }}>📍 {deliveryResult.branch.name}</div>}
+                  <div style={{ display:'flex', justifyContent:'space-between', marginTop:6, fontSize:13, fontWeight:700 }}>
+                    <span style={{ color:'#555' }}>{ar?'رسوم التوصيل':'Delivery fee'}</span>
+                    <span style={{ color: deliveryResult.fee===0 ? '#10b981' : R }}>
+                      {deliveryResult.fee===0 ? (ar?'مجاني':'Free') : `﷼${deliveryResult.fee}`}
+                    </span>
+                  </div>
+                  {deliveryResult.zone?.min_order > 0 && subtotal < deliveryResult.zone.min_order && (
+                    <div style={{ marginTop:6, fontSize:12, color:'#ef4444', fontWeight:600 }}>
+                      ⚠️ {ar?`الحد الأدنى للطلب ﷼${deliveryResult.zone.min_order}`:`Min order ﷼${deliveryResult.zone.min_order}`}
+                    </div>
+                  )}
+                </div>
+              )}
+              {deliveryStep === 'error' && deliveryResult?.error && (
+                <div>
+                  <div style={{ fontSize:13, color:'#ef4444', fontWeight:600, marginBottom:8 }}>
+                    ❌ {deliveryResult.error}
+                  </div>
+                  <button onClick={()=>setDeliveryStep('idle')} style={{ fontSize:12, color:R, background:'none', border:'none', cursor:'pointer', fontWeight:700 }}>
+                    {ar?'حاول مرة أخرى':'Try again'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Price breakdown ── */}
+          <div style={{ padding:'16px 20px', background:'#f8f8f8', margin:'12px 20px 0', borderRadius:16 }}>
+            {orderType === 'delivery' && deliveryFee > 0 && (
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#888', marginBottom:6 }}>
+                <span>{ar?'المجموع الفرعي':'Subtotal'}</span>
+                <span>﷼{subtotal.toFixed(2)}</span>
+              </div>
+            )}
+            {orderType === 'delivery' && (
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#888', marginBottom:6 }}>
+                <span>{ar?'التوصيل':'Delivery'}</span>
+                <span style={{ color: deliveryFee===0?'#10b981':'#1a1a1a' }}>
+                  {deliveryStep==='done' ? (deliveryFee===0?(ar?'مجاني':'Free'):`﷼${deliveryFee}`) : '—'}
+                </span>
+              </div>
+            )}
             <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, fontSize:16 }}>
               <span>{ar?'الإجمالي':'Total'}</span>
               <span style={{ color:R }}>﷼{totalPrice.toFixed(2)}</span>
@@ -386,7 +553,7 @@ export default function CustomerApp() {
 
           {/* Show who is placing the order */}
           {customerUser ? (
-            <div style={{ margin:'0 20px 16px', padding:'11px 14px', background:`${R}08`, borderRadius:12, display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ margin:'12px 20px 0', padding:'11px 14px', background:`${R}08`, borderRadius:12, display:'flex', alignItems:'center', gap:10 }}>
               <span style={{ fontSize:20 }}>👤</span>
               <div>
                 <div style={{ fontSize:13, fontWeight:700, color:'#1a1a1a' }}>{customerUser.name}</div>
@@ -394,14 +561,21 @@ export default function CustomerApp() {
               </div>
             </div>
           ) : (
-            <div style={{ margin:'0 20px 16px', padding:'11px 14px', background:'#fef3c7', borderRadius:12, fontSize:13, color:'#92400e', fontWeight:600 }}>
+            <div style={{ margin:'12px 20px 0', padding:'11px 14px', background:'#fef3c7', borderRadius:12, fontSize:13, color:'#92400e', fontWeight:600 }}>
               ⚠️ {ar?'تحتاج لتسجيل الدخول لإتمام الطلب':'You need to sign in to place an order'}
             </div>
           )}
 
-          <div style={{ padding:'0 20px 40px' }}>
-            <button onClick={placeOrder} style={{ width:'100%', padding:16, background:R, border:'none', borderRadius:16, color:'#fff', fontSize:16, fontWeight:800, cursor:'pointer' }}>
-              {!customerUser ? (ar?'تسجيل الدخول للطلب':'Sign In to Order') : `🥡 ${ar?'تأكيد الطلب':'Place Order'} · ﷼${totalPrice.toFixed(2)}`}
+          <div style={{ padding:'12px 20px 40px' }}>
+            <button
+              onClick={placeOrder}
+              disabled={orderType==='delivery' && (deliveryStep==='locating' || deliveryStep==='error' || (deliveryResult?.zone?.min_order > 0 && subtotal < deliveryResult.zone.min_order))}
+              style={{ width:'100%', padding:16, background: (orderType==='delivery' && deliveryStep !== 'done') ? '#ccc' : R, border:'none', borderRadius:16, color:'#fff', fontSize:16, fontWeight:800, cursor: (orderType==='delivery' && deliveryStep !== 'done') ? 'not-allowed' : 'pointer' }}>
+              {!customerUser
+                ? (ar?'تسجيل الدخول للطلب':'Sign In to Order')
+                : orderType==='delivery' && deliveryStep !== 'done'
+                  ? (ar?'حدد موقعك أولاً':'Set location first')
+                  : `${orderType==='delivery'?'🛵':'🥡'} ${ar?'تأكيد الطلب':'Place Order'} · ﷼${totalPrice.toFixed(2)}`}
             </button>
           </div>
         </div>
