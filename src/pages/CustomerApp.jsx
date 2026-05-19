@@ -1013,6 +1013,7 @@ export default function CustomerApp() {
       {cartOpen && CartDrawer()}
       {authSheet && (
         <AuthSheet
+          key="auth-sheet"
           ar={ar}
           R={R}
           initialMode={authInitialMode}
@@ -1023,6 +1024,7 @@ export default function CustomerApp() {
       )}
       {orderDetailsOpen && (
         <OrderDetailsSheet
+          key="order-details-sheet"
           ar={ar}
           R={R}
           orderType={orderType}
