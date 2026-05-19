@@ -175,7 +175,7 @@ function AuthSheet({ ar, R, initialMode, pendingOrder, onSuccess, onClose }) {
 }
 
 // ── Order Details Sheet — standalone component so inputs never lose focus ─────
-function OrderDetailsSheet({ ar, R, orderType, deliveryResult, subtotal, deliveryFee, totalPrice, cart, onConfirm, onClose }) {
+function OrderDetailsSheet({ ar, R, orderType, deliveryResult, subtotal, deliveryFee, discount, totalPrice, cart, onConfirm, onClose }) {
   const [details, setDetails]     = useState({ address:'', apt:'', deliveryNotes:'', orderNotes:'', paymentMethod:'cash' })
   const [confirming, setConfirming] = useState(false)
 
@@ -336,6 +336,12 @@ function OrderDetailsSheet({ ar, R, orderType, deliveryResult, subtotal, deliver
                 </span>
               </div>
             )}
+            {discount > 0 && (
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
+                <span style={{ fontSize:13, color:'#10b981', fontWeight:600 }}>{ar?'🎉 الخصم':'🎉 Discount'}</span>
+                <span style={{ fontSize:13, color:'#10b981', fontWeight:700 }}>−﷼{discount.toFixed(2)}</span>
+              </div>
+            )}
             <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:10, display:'flex', justifyContent:'space-between' }}>
               <span style={{ fontSize:16, fontWeight:800, color:'#fff' }}>{ar?'الإجمالي':'Total'}</span>
               <span style={{ fontSize:16, fontWeight:900, color:R }}>﷼{totalPrice.toFixed(2)}</span>
@@ -401,6 +407,14 @@ export default function CustomerApp() {
   // ── ORDER DETAILS SHEET ──────────────────────────────────────────────────────
   const [orderDetailsOpen, setOrderDetailsOpen] = useState(false)
 
+  // ── COUPON & LOYALTY ─────────────────────────────────────────────────────────
+  const [couponCode, setCouponCode] = useState('')
+  const [couponApplied, setCouponApplied] = useState(null) // { code, type, value, discount, id, uses }
+  const [couponLoading, setCouponLoading] = useState(false)
+  const [couponError, setCouponError] = useState('')
+  const [usingPoints, setUsingPoints] = useState(false)
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0)
+
   const ar = lang === 'ar'
   const dir = ar ? 'rtl' : 'ltr'
 
@@ -442,6 +456,19 @@ export default function CustomerApp() {
     }
   }, [customerUser, restaurant])
 
+  // Load loyalty points
+  useEffect(() => {
+    if (customerUser?.email && restaurant) {
+      supabase.from('loyalty').select('points')
+        .eq('restaurant_id', restaurant.id)
+        .eq('customer_email', customerUser.email)
+        .maybeSingle()
+        .then(({ data }) => setLoyaltyPoints(data?.points || 0))
+    } else {
+      setLoyaltyPoints(0)
+    }
+  }, [customerUser, restaurant])
+
   useEffect(() => {
     if (screen === 'splash') {
       const t = setTimeout(() => setScreen('lang'), 2200)
@@ -471,7 +498,15 @@ export default function CustomerApp() {
   const totalItems = cart.reduce((s, c) => s + c.qty, 0)
   const subtotal = cart.reduce((s, c) => s + c.price * c.qty, 0)
   const deliveryFee = orderType === 'delivery' && deliveryResult?.fee ? deliveryResult.fee : 0
-  const totalPrice = subtotal + deliveryFee
+  const couponDiscount = couponApplied
+    ? (couponApplied.type === 'percent'
+        ? Math.min(subtotal * couponApplied.value / 100, subtotal)
+        : Math.min(couponApplied.value, subtotal))
+    : 0
+  const pointsUsed    = usingPoints && loyaltyPoints >= 100 ? Math.floor(loyaltyPoints / 100) * 100 : 0
+  const pointsDiscount = pointsUsed * 0.1  // 100 pts = ﷼10
+  const discount      = couponDiscount + pointsDiscount
+  const totalPrice    = Math.max(0, subtotal + deliveryFee - discount)
 
   const addToCart = (item, qty = 1) => {
     setCart(prev => {
@@ -573,14 +608,36 @@ export default function CustomerApp() {
     setOrderDetailsOpen(true)
   }
 
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) return
+    setCouponLoading(true); setCouponError('')
+    const { data } = await supabase.from('coupons').select('*')
+      .eq('restaurant_id', restaurant.id)
+      .eq('code', couponCode.trim().toUpperCase())
+      .eq('active', true)
+      .maybeSingle()
+    if (!data) { setCouponError(ar ? 'كود غير صالح أو غير نشط' : 'Invalid or inactive code'); setCouponLoading(false); return }
+    if (data.expires_at && new Date(data.expires_at) < new Date()) { setCouponError(ar ? 'انتهت صلاحية الكوبون' : 'Coupon has expired'); setCouponLoading(false); return }
+    if (data.max_uses !== null && data.uses >= data.max_uses) { setCouponError(ar ? 'تم الوصول للحد الأقصى للاستخدام' : 'Usage limit reached'); setCouponLoading(false); return }
+    if (data.min_order > 0 && subtotal < data.min_order) { setCouponError(ar ? `الحد الأدنى للطلب ﷼${data.min_order}` : `Min order ﷼${data.min_order}`); setCouponLoading(false); return }
+    const discountAmt = data.type === 'percent' ? Math.min(subtotal * data.value / 100, subtotal) : Math.min(data.value, subtotal)
+    setCouponApplied({ ...data, discount: discountAmt })
+    setCouponCode(''); setCouponLoading(false)
+  }
+
+  const removeCoupon = () => { setCouponApplied(null); setCouponCode(''); setCouponError('') }
+
   const confirmOrder = async (details) => {
     const fee = orderType === 'delivery' ? (deliveryResult?.fee || 0) : 0
+    const finalTotal = Math.max(0, subtotal + fee - discount)
     await supabase.from('orders').insert({
       restaurant_id: restaurant.id,
       branch_id: deliveryResult?.branch?.id || null,
       items: cart.map(c => ({ id: c.id, name: c.name, price: c.price, qty: c.qty })),
-      total: subtotal + fee,
+      total: finalTotal,
       delivery_fee: fee,
+      discount: discount > 0 ? discount : null,
+      coupon_code: couponApplied?.code || null,
       status: 'pending',
       type: orderType,
       customer_name:    customerUser?.name  || '',
@@ -591,11 +648,30 @@ export default function CustomerApp() {
       order_notes:      details.orderNotes || null,
       payment_method:   details.paymentMethod,
     })
-    setOrderDetailsOpen(false)
-    setCartOpen(false)
-    setOrdered(true)
-    setOrderStatus(0)
-    setCart([])
+
+    // Increment coupon uses
+    if (couponApplied) {
+      await supabase.from('coupons').update({ uses: (couponApplied.uses || 0) + 1 }).eq('id', couponApplied.id)
+    }
+
+    // Award / redeem loyalty points (1 point per ﷼1 spent, 100 pts = ﷼10 redemption)
+    if (customerUser?.email) {
+      const earned = Math.floor(finalTotal)
+      const netPoints = Math.max(-(pointsUsed), earned - pointsUsed)
+      const newPoints = Math.max(0, loyaltyPoints - pointsUsed + earned)
+      await supabase.from('loyalty').upsert({
+        restaurant_id: restaurant.id,
+        customer_email: customerUser.email,
+        points: newPoints,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'restaurant_id,customer_email' })
+      setLoyaltyPoints(newPoints)
+    }
+
+    // Reset promo state
+    setCouponApplied(null); setCouponCode(''); setCouponError(''); setUsingPoints(false)
+    setOrderDetailsOpen(false); setCartOpen(false)
+    setOrdered(true); setOrderStatus(0); setCart([])
     setTimeout(() => setOrderStatus(1), 3000)
     setTimeout(() => setOrderStatus(2), 7000)
   }
@@ -746,9 +822,70 @@ export default function CustomerApp() {
             </div>
           )}
 
+          {/* Coupon code input */}
+          <div style={{ margin:'12px 20px 0' }}>
+            {couponApplied ? (
+              <div style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px', background:'#d1fae5', borderRadius:12, border:'1px solid #6ee7b7' }}>
+                <span style={{ fontSize:16 }}>🎟️</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#065f46', fontFamily:'monospace' }}>{couponApplied.code}</div>
+                  <div style={{ fontSize:11, color:'#047857' }}>
+                    {ar ? `خصم` : 'Saving'} ﷼{couponDiscount.toFixed(2)}
+                  </div>
+                </div>
+                <button onClick={removeCoupon} style={{ fontSize:11, color:'#ef4444', background:'#fee2e2', border:'none', borderRadius:7, padding:'4px 10px', fontWeight:700, cursor:'pointer' }}>
+                  {ar?'إزالة':'Remove'}
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <input
+                    value={couponCode}
+                    onChange={e => setCouponCode(e.target.value.toUpperCase())}
+                    onKeyDown={e => e.key === 'Enter' && applyCoupon()}
+                    placeholder={ar ? 'كود الخصم' : 'Coupon code'}
+                    style={{ flex:1, padding:'11px 14px', background:'#f8f8f8', border:'1.5px solid #f0f0f0', borderRadius:12, fontSize:14, outline:'none', fontFamily:'monospace', letterSpacing:'0.05em' }}
+                    onFocus={e => { e.target.style.borderColor = R }}
+                    onBlur={e => { e.target.style.borderColor = '#f0f0f0' }}
+                  />
+                  <button
+                    onClick={applyCoupon}
+                    disabled={couponLoading || !couponCode.trim()}
+                    style={{ padding:'0 18px', background:couponLoading||!couponCode.trim()?'#e0e0e0':R, border:'none', borderRadius:12, color:'#fff', fontSize:13, fontWeight:700, cursor:couponLoading||!couponCode.trim()?'not-allowed':'pointer', whiteSpace:'nowrap' }}>
+                    {couponLoading ? '...' : (ar ? 'تطبيق' : 'Apply')}
+                  </button>
+                </div>
+                {couponError && (
+                  <div style={{ fontSize:12, color:'#ef4444', fontWeight:600, marginTop:6 }}>❌ {couponError}</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Loyalty points redemption */}
+          {customerUser && loyaltyPoints >= 100 && (
+            <div style={{ margin:'8px 20px 0', padding:'11px 14px', background: usingPoints ? '#fef3c7' : '#f8f8f8', borderRadius:12, border: usingPoints ? '1.5px solid #f59e0b' : '1.5px solid transparent', display:'flex', alignItems:'center', gap:10, transition:'all 0.2s' }}>
+              <span style={{ fontSize:20 }}>🏆</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a1a' }}>
+                  {ar ? `نقاطك: ${loyaltyPoints} نقطة` : `Your points: ${loyaltyPoints} pts`}
+                </div>
+                <div style={{ fontSize:11, color:'#888' }}>
+                  {ar
+                    ? `استخدم ${pointsUsed} نقطة = خصم ﷼${pointsDiscount.toFixed(0)}`
+                    : `Redeem ${pointsUsed} pts = ﷼${pointsDiscount.toFixed(0)} off`}
+                </div>
+              </div>
+              <button onClick={() => setUsingPoints(v => !v)} style={{ width:40, height:22, borderRadius:11, background: usingPoints ? '#f59e0b' : '#e0e0e0', border:'none', cursor:'pointer', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+                <div style={{ width:16, height:16, borderRadius:'50%', background:'#fff', position:'absolute', top:3, left: usingPoints ? 21 : 3, transition:'left 0.2s' }}/>
+              </button>
+            </div>
+          )}
+
           {/* Price breakdown */}
           <div style={{ padding:'16px 20px', background:'#f8f8f8', margin:'12px 20px 0', borderRadius:16 }}>
-            {orderType === 'delivery' && deliveryFee > 0 && (
+            {(orderType === 'delivery' || discount > 0) && (
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#888', marginBottom:6 }}>
                 <span>{ar?'المجموع الفرعي':'Subtotal'}</span>
                 <span>﷼{subtotal.toFixed(2)}</span>
@@ -760,6 +897,12 @@ export default function CustomerApp() {
                 <span style={{ color: deliveryFee===0?'#10b981':'#1a1a1a' }}>
                   {deliveryStep==='done' ? (deliveryFee===0?(ar?'مجاني':'Free'):`﷼${deliveryFee}`) : '—'}
                 </span>
+              </div>
+            )}
+            {discount > 0 && (
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'#10b981', fontWeight:700, marginBottom:6 }}>
+                <span>{ar ? '🎉 الخصم' : '🎉 Discount'}</span>
+                <span>−﷼{discount.toFixed(2)}</span>
               </div>
             )}
             <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, fontSize:16 }}>
@@ -922,8 +1065,28 @@ export default function CustomerApp() {
             <div style={{ fontSize:20, fontWeight:800, marginBottom:20, color:'#1a1a1a' }}>{ar?'المكافآت':'Rewards'}</div>
             <div style={{ background:`linear-gradient(135deg,${R},${R}bb)`, borderRadius:24, padding:24, marginBottom:20, color:'#fff' }}>
               <div style={{ fontSize:13, opacity:0.8, marginBottom:4 }}>{ar?'نقاطك':'Your Points'}</div>
-              <div style={{ fontSize:48, fontWeight:900, marginBottom:4 }}>0</div>
-              <div style={{ fontSize:13, opacity:0.7 }}>{ar?'اطلب لتكسب نقاط':'Order to earn points'}</div>
+              <div style={{ fontSize:56, fontWeight:900, marginBottom:4, letterSpacing:'-0.02em' }}>{loyaltyPoints}</div>
+              <div style={{ fontSize:13, opacity:0.7, marginBottom:16 }}>{ar?'اطلب لتكسب نقاط':'Order to earn 1 pt per ﷼1 spent'}</div>
+              {loyaltyPoints >= 100 && (
+                <div style={{ background:'rgba(255,255,255,0.2)', borderRadius:12, padding:'10px 14px', fontSize:13, fontWeight:600 }}>
+                  🎉 {ar
+                    ? `لديك ما يكفي لخصم ﷼${Math.floor(loyaltyPoints/100)*10}`
+                    : `Redeem for ﷼${Math.floor(loyaltyPoints/100)*10} off your next order`}
+                </div>
+              )}
+            </div>
+            <div style={{ background:'#fff', borderRadius:18, padding:18, border:'1px solid #f0f0f0', marginBottom:12 }}>
+              <div style={{ fontSize:11, fontWeight:800, color:'#aaa', letterSpacing:'0.07em', marginBottom:14 }}>{ar?'كيف تعمل النقاط؟':'HOW POINTS WORK'}</div>
+              {[
+                ['🛍️', ar?'1 نقطة لكل ﷼1 تنفقه':'1 point for every ﷼1 spent'],
+                ['🎁', ar?'100 نقطة = خصم ﷼10':'100 points = ﷼10 off'],
+                ['⚡', ar?'تُضاف النقاط بعد كل طلب':'Points added after each order'],
+              ].map(([icon, text]) => (
+                <div key={text} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+                  <div style={{ width:36, height:36, borderRadius:10, background:`${R}12`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>{icon}</div>
+                  <div style={{ fontSize:13, color:'#555', fontWeight:500 }}>{text}</div>
+                </div>
+              ))}
             </div>
             {!customerUser && (
               <div style={{ textAlign:'center', padding:'16px 0' }}>
@@ -969,7 +1132,7 @@ export default function CustomerApp() {
               <div style={{ padding:'20px 16px 0' }}>
                 {[
                   ['📦', ar?'طلباتي':'My Orders', `${customerOrders.length} ${ar?'طلب':'orders'}`, ()=>setTab('orders')],
-                  ['🎁', ar?'نقاطي':'My Points', '0 pts', null],
+                  ['🏆', ar?'نقاطي':'My Points', ar?`${loyaltyPoints} نقطة`:`${loyaltyPoints} pts`, ()=>setTab('rewards')],
                   ['🌐', ar?'English':'عربي', '', ()=>setLang(l=>l==='en'?'ar':'en')],
                 ].map(([icon, label, sub, action]) => (
                   <button key={label} onClick={action||undefined} style={{ width:'100%', display:'flex', alignItems:'center', gap:14, padding:'14px 0', background:'transparent', border:'none', borderBottom:'1px solid #f5f5f5', cursor:action?'pointer':'default', textAlign:'left' }}>
@@ -1031,6 +1194,7 @@ export default function CustomerApp() {
           deliveryResult={deliveryResult}
           subtotal={subtotal}
           deliveryFee={deliveryFee}
+          discount={discount}
           totalPrice={totalPrice}
           cart={cart}
           onConfirm={confirmOrder}

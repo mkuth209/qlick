@@ -66,6 +66,12 @@ const T = {
     minKm:"Min KM", maxKm:"Max KM", zoneFee:"Fee (SAR)", zoneMinOrder:"Min Order (SAR)",
     free:"Free", branchLocation:"Branch Coordinates (for delivery distance)",
     latLabel:"Latitude", lngLabel:"Longitude",
+    coupons:"Coupons", addCoupon:"+ Add Coupon", couponCode:"Code", couponType:"Type",
+    couponValue:"Value", couponUses:"Uses", couponExpires:"Expires", percentOff:"% Off",
+    fixedAmt:"﷼ Fixed", minOrderLabel:"Min Order (SAR)", maxUsesLabel:"Max Uses (optional)",
+    expiryDateLabel:"Expiry Date (optional)", noExpiry:"No expiry", loyaltyStats:"Loyalty Stats",
+    totalLoyalCustomers:"Customers with points", topCustomers:"Top customers",
+    avgPoints:"Avg Points", noCoupons:"No coupons yet",
   },
   ar: {
     dir:"rtl", font:"'Tajawal', sans-serif",
@@ -130,6 +136,12 @@ const T = {
     minKm:"الحد الأدنى (كم)", maxKm:"الحد الأقصى (كم)", zoneFee:"رسوم التوصيل", zoneMinOrder:"الحد الأدنى للطلب",
     free:"مجاني", branchLocation:"إحداثيات الفرع (للتوصيل)",
     latLabel:"خط العرض", lngLabel:"خط الطول",
+    coupons:"الكوبونات", addCoupon:"+ إضافة كوبون", couponCode:"الكود", couponType:"النوع",
+    couponValue:"القيمة", couponUses:"الاستخدام", couponExpires:"الانتهاء", percentOff:"% خصم",
+    fixedAmt:"ريال ثابت", minOrderLabel:"الحد الأدنى (ريال)", maxUsesLabel:"الحد الأقصى (اختياري)",
+    expiryDateLabel:"تاريخ الانتهاء (اختياري)", noExpiry:"بلا انتهاء", loyaltyStats:"إحصاءات الولاء",
+    totalLoyalCustomers:"عملاء لديهم نقاط", topCustomers:"أعلى العملاء",
+    avgPoints:"متوسط النقاط", noCoupons:"لا توجد كوبونات",
   }
 };
 
@@ -156,11 +168,11 @@ const TYPE_ICON = { pickup:"🥡", delivery:"🛵", "dine-in":"🪑" };
 const TYPE_LABEL = (t) => ({ pickup:t.pickup, delivery:t.delivery, "dine-in":t.dineIn });
 
 const ROLE_NAV = {
-  owner:    ["overview","orders","menu","stock","analytics","employees","branches","reviews","hours","payment","settings"],
+  owner:    ["overview","orders","menu","stock","analytics","coupons","employees","branches","reviews","hours","payment","settings"],
   manager:  ["overview","orders","menu","stock","analytics","employees","branches","reviews","hours","settings"],
   employee: ["orders","menu","stock"],
 };
-const NAV_ICONS = { overview:"📊",orders:"📦",menu:"🍽️",stock:"🗃️",analytics:"📈",employees:"👥",branches:"🏪",reviews:"⭐",hours:"🕐",payment:"💳",settings:"⚙️" };
+const NAV_ICONS = { overview:"📊",orders:"📦",menu:"🍽️",stock:"🗃️",analytics:"📈",coupons:"🎟️",employees:"👥",branches:"🏪",reviews:"⭐",hours:"🕐",payment:"💳",settings:"⚙️" };
 const ROLE_COLORS = { owner:"#7c3aed", manager:"#0ea5e9", employee:"#10b981" };
 const ROLE_ICONS  = { owner:"👑", manager:"🧑‍💼", employee:"👷" };
 
@@ -945,6 +957,7 @@ function BranchesPage({ branches, setBranches, orders, staff, restaurantId, deli
   const [expandedZones, setExpandedZones] = useState({}); // branchId → bool
   const [zoneForm, setZoneForm] = useState(null); // null | { branchId, min_km, max_km, fee, min_order }
   const [zoneAdding, setZoneAdding] = useState(false);
+  const [zoneError, setZoneError] = useState("");
 
   const toggle = async (id) => {
     const b = branches.find(br=>br.id===id);
@@ -984,6 +997,7 @@ function BranchesPage({ branches, setBranches, orders, staff, restaurantId, deli
   const addZone = async () => {
     if (!zoneForm || !zoneForm.max_km) return;
     setZoneAdding(true);
+    setZoneError("");
     const { data, error } = await supabase.from("delivery_zones").insert({
       branch_id: zoneForm.branchId,
       restaurant_id: restaurantId,
@@ -995,6 +1009,9 @@ function BranchesPage({ branches, setBranches, orders, staff, restaurantId, deli
     if (!error && data) {
       setDeliveryZones(p => [...p, data].sort((a,b)=>a.min_km-b.min_km));
       setZoneForm(null);
+      setZoneError("");
+    } else if (error) {
+      setZoneError(error.message);
     }
     setZoneAdding(false);
   };
@@ -1133,11 +1150,23 @@ function BranchesPage({ branches, setBranches, orders, staff, restaurantId, deli
                           </div>
                         ))}
                       </div>
+                      {zoneError && (
+                        <div style={{ background:"#fee2e2", border:"1px solid #fecaca", borderRadius:9, padding:"8px 12px", marginBottom:8, fontSize:12, color:"#ef4444", fontWeight:600 }}>
+                          ❌ {zoneError}
+                          {zoneError.includes("does not exist") && (
+                            <div style={{ marginTop:4, fontSize:11, color:"#b91c1c" }}>
+                              {lang==="ar"
+                                ? "يرجى تشغيل SQL في Supabase لإنشاء جدول delivery_zones"
+                                : "Run the delivery_zones SQL migration in Supabase first"}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div style={{ display:"flex", gap:8 }}>
                         <button onClick={addZone} disabled={zoneAdding||!zoneForm.max_km} style={{ padding:"8px 18px", background:zoneAdding||!zoneForm.max_km?"#ccc":R, border:"none", borderRadius:9, color:"#fff", fontSize:12, fontWeight:700, cursor:zoneAdding||!zoneForm.max_km?"not-allowed":"pointer" }}>
                           {zoneAdding?"⏳":(lang==="ar"?"حفظ":"Save")}
                         </button>
-                        <button onClick={()=>setZoneForm(null)} style={{ padding:"8px 14px", background:"#f0f0f0", border:"none", borderRadius:9, color:"#666", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                        <button onClick={()=>{ setZoneForm(null); setZoneError(""); }} style={{ padding:"8px 14px", background:"#f0f0f0", border:"none", borderRadius:9, color:"#666", fontSize:12, fontWeight:700, cursor:"pointer" }}>
                           {lang==="ar"?"إلغاء":"Cancel"}
                         </button>
                       </div>
@@ -1460,6 +1489,176 @@ function SettingsPage({ restaurant, setRestaurant, t, lang, slug }) {
   );
 }
 
+// ── COUPONS PAGE ─────────────────────────────────────────────────────────────
+function CouponsPage({ coupons, setCoupons, restaurantId, t, lang }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ code:"", type:"percent", value:"", min_order:"0", max_uses:"", expires_at:"" });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [loyalty, setLoyalty] = useState([]);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+    supabase.from("loyalty").select("*").eq("restaurant_id", restaurantId)
+      .order("points", { ascending:false }).limit(20)
+      .then(({ data }) => setLoyalty(data || []));
+  }, [restaurantId]);
+
+  const addCoupon = async () => {
+    if (!form.code.trim() || !form.value) { setFormError(lang==="ar"?"الكود والقيمة مطلوبان":"Code and value are required"); return; }
+    setSaving(true); setFormError("");
+    const { data, error: e } = await supabase.from("coupons").insert({
+      restaurant_id: restaurantId,
+      code: form.code.trim().toUpperCase(),
+      type: form.type,
+      value: parseFloat(form.value),
+      min_order: parseFloat(form.min_order) || 0,
+      max_uses: form.max_uses ? parseInt(form.max_uses) : null,
+      expires_at: form.expires_at || null,
+    }).select().single();
+    if (e) { setFormError(e.message); setSaving(false); return; }
+    setCoupons(p => [data, ...p]);
+    setForm({ code:"", type:"percent", value:"", min_order:"0", max_uses:"", expires_at:"" });
+    setShowForm(false); setSaving(false);
+  };
+
+  const deleteCoupon = async (id) => {
+    await supabase.from("coupons").delete().eq("id", id);
+    setCoupons(p => p.filter(c => c.id !== id));
+  };
+
+  const toggleActive = async (id, active) => {
+    await supabase.from("coupons").update({ active: !active }).eq("id", id);
+    setCoupons(p => p.map(c => c.id === id ? { ...c, active: !active } : c));
+  };
+
+  const totalPoints = loyalty.reduce((s, l) => s + (l.points || 0), 0);
+  const avgPoints = loyalty.length > 0 ? Math.round(totalPoints / loyalty.length) : 0;
+
+  return (
+    <div>
+      <STitle title={t.coupons} action={showForm ? (lang==="ar"?"إلغاء":"Cancel") : t.addCoupon} onClick={() => { setShowForm(v=>!v); setFormError(""); }}/>
+
+      {/* Add coupon form */}
+      {showForm && (
+        <Card>
+          <CardTitle>{t.addCoupon}</CardTitle>
+          {formError && (
+            <div style={{ background:"#fee2e2", border:"1px solid #fecaca", borderRadius:10, padding:"9px 13px", marginBottom:14, fontSize:13, color:"#ef4444", fontWeight:600 }}>
+              {formError}
+            </div>
+          )}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.couponCode}</div>
+              <input value={form.code} onChange={e=>setForm(p=>({...p,code:e.target.value.toUpperCase()}))} placeholder="SAVE20" style={inp()} onFocus={e=>{e.target.style.borderColor=R}} onBlur={e=>{e.target.style.borderColor="#f0f0f0"}}/>
+            </div>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.couponType}</div>
+              <select value={form.type} onChange={e=>setForm(p=>({...p,type:e.target.value}))} style={inp()}>
+                <option value="percent">{t.percentOff}</option>
+                <option value="fixed">{t.fixedAmt}</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.couponValue}</div>
+              <input type="number" min="0" value={form.value} onChange={e=>setForm(p=>({...p,value:e.target.value}))} placeholder={form.type==="percent"?"20":"20.00"} style={inp()} onFocus={e=>{e.target.style.borderColor=R}} onBlur={e=>{e.target.style.borderColor="#f0f0f0"}}/>
+            </div>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.minOrderLabel}</div>
+              <input type="number" min="0" value={form.min_order} onChange={e=>setForm(p=>({...p,min_order:e.target.value}))} style={inp()} onFocus={e=>{e.target.style.borderColor=R}} onBlur={e=>{e.target.style.borderColor="#f0f0f0"}}/>
+            </div>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.maxUsesLabel}</div>
+              <input type="number" min="0" value={form.max_uses} onChange={e=>setForm(p=>({...p,max_uses:e.target.value}))} placeholder="∞" style={inp()} onFocus={e=>{e.target.style.borderColor=R}} onBlur={e=>{e.target.style.borderColor="#f0f0f0"}}/>
+            </div>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#aaa", marginBottom:4 }}>{t.expiryDateLabel}</div>
+              <input type="date" value={form.expires_at} onChange={e=>setForm(p=>({...p,expires_at:e.target.value}))} style={inp()} onFocus={e=>{e.target.style.borderColor=R}} onBlur={e=>{e.target.style.borderColor="#f0f0f0"}}/>
+            </div>
+          </div>
+          <button onClick={addCoupon} disabled={saving} style={{ padding:"9px 22px", background:saving?"#ccc":R, border:"none", borderRadius:11, color:"#fff", fontSize:13, fontWeight:700, cursor:saving?"not-allowed":"pointer" }}>
+            {saving ? "..." : t.save}
+          </button>
+        </Card>
+      )}
+
+      {/* Coupons table */}
+      <Card>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:520 }}>
+            <thead>
+              <tr style={{ borderBottom:"2px solid #f0f0f0" }}>
+                {[t.couponCode, t.couponType, t.couponValue, t.couponUses, t.couponExpires, t.active, ""].map((h,i) => (
+                  <th key={i} style={{ textAlign:"left", padding:"8px 10px", fontSize:11, fontWeight:800, color:"#aaa", textTransform:"uppercase", letterSpacing:"0.05em", whiteSpace:"nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {coupons.map(c => (
+                <tr key={c.id} style={{ borderBottom:"1px solid #f8f8f8" }}>
+                  <td style={{ padding:"11px 10px", fontWeight:800, fontSize:13, fontFamily:"monospace", color:R, letterSpacing:"0.05em" }}>{c.code}</td>
+                  <td style={{ padding:"11px 10px", fontSize:12, color:"#888" }}>{c.type==="percent"?t.percentOff:t.fixedAmt}</td>
+                  <td style={{ padding:"11px 10px", fontSize:13, fontWeight:700 }}>
+                    <span style={{ padding:"3px 8px", background:c.type==="percent"?`${R}15`:"#d1fae5", borderRadius:6, color:c.type==="percent"?R:"#10b981", fontFamily:"monospace" }}>
+                      {c.type==="percent"?`${c.value}%`:`﷼${c.value}`}
+                    </span>
+                  </td>
+                  <td style={{ padding:"11px 10px", fontSize:12, color:"#888" }}>{c.uses}{c.max_uses?`/${c.max_uses}`:""}</td>
+                  <td style={{ padding:"11px 10px", fontSize:11, color:"#aaa" }}>
+                    {c.expires_at ? new Date(c.expires_at).toLocaleDateString(lang==="ar"?"ar-SA":"en-US",{month:"short",day:"numeric",year:"numeric"}) : <span style={{ color:"#d1fae5", fontWeight:600 }}>{t.noExpiry}</span>}
+                  </td>
+                  <td style={{ padding:"11px 10px" }}>
+                    <button onClick={()=>toggleActive(c.id,c.active)} style={{ width:40,height:22,borderRadius:11,background:c.active?R:"#e0e0e0",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0 }}>
+                      <div style={{ width:16,height:16,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:c.active?21:3,transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
+                    </button>
+                  </td>
+                  <td style={{ padding:"11px 10px" }}>
+                    <button onClick={()=>deleteCoupon(c.id)} style={{ padding:"4px 10px",background:"#fee2e2",border:"none",borderRadius:7,color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer" }}>✕</button>
+                  </td>
+                </tr>
+              ))}
+              {coupons.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ textAlign:"center", padding:32, color:"#aaa", fontSize:13 }}>
+                    🎟️ {t.noCoupons}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Loyalty stats */}
+      <div style={{ display:"flex", gap:12, marginBottom:14 }}>
+        <StatCard icon="🏆" label={t.totalLoyalCustomers} value={loyalty.length} color="#f59e0b"/>
+        <StatCard icon="⭐" label={t.avgPoints} value={avgPoints} color="#8b5cf6"/>
+        <StatCard icon="💎" label={lang==="ar"?"إجمالي النقاط":"Total Points"} value={totalPoints.toLocaleString()} color="#10b981"/>
+      </div>
+
+      {loyalty.length > 0 && (
+        <Card mb={0}>
+          <CardTitle>{t.topCustomers}</CardTitle>
+          {loyalty.slice(0,10).map((l,i) => (
+            <div key={l.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:"1px solid #f8f8f8" }}>
+              <div style={{ width:28,height:28,borderRadius:"50%",background:i===0?"#f59e0b":i===1?"#9ca3af":i===2?"#d97706":"#f0f0f0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:i<3?"#fff":"#888",flexShrink:0 }}>
+                {i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{l.customer_email}</div>
+              </div>
+              <div style={{ display:"flex",alignItems:"center",gap:5,fontWeight:800,color:"#f59e0b",fontSize:14,flexShrink:0 }}>
+                🏆 {l.points}
+              </div>
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 export default function OwnerDashboard() {
   const { id: slug } = useParams();
@@ -1506,6 +1705,7 @@ export default function OwnerDashboard() {
   const [staff, setStaff] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [deliveryZones, setDeliveryZones] = useState([]);
+  const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(()=>{
@@ -1534,13 +1734,15 @@ export default function OwnerDashboard() {
       supabase.from("staff").select("*").eq("restaurant_id", rid),
       supabase.from("reviews").select("*").eq("restaurant_id", rid).order("created_at",{ascending:false}),
       supabase.from("delivery_zones").select("*").eq("restaurant_id", rid).order("min_km",{ascending:true}),
-    ]).then(([{data:bData},{data:oData},{data:mData},{data:sData},{data:rData},{data:dzData}])=>{
+      supabase.from("coupons").select("*").eq("restaurant_id", rid).order("created_at",{ascending:false}),
+    ]).then(([{data:bData},{data:oData},{data:mData},{data:sData},{data:rData},{data:dzData},{data:cpData}])=>{
       setBranches(bData||[]);
       setOrders(oData||[]);
       setMenuItems((mData||[]).map(item=>({...item, alert:item.low_stock_alert??10, sizes:item.sizes||[], options:item.options||[]})));
       setStaff(sData||[]);
       setReviews(rData||[]);
       setDeliveryZones(dzData||[]);
+      setCoupons(cpData||[]);
       setLoading(false);
     });
 
@@ -1583,7 +1785,7 @@ export default function OwnerDashboard() {
     }), [orders, branches, lang]);
 
   const pendingCount = orders.filter(o=>o.status==="pending").length;
-  const navLabel = (id) => ({ overview:t.overview, orders:t.orders, menu:t.menu, stock:t.stock, analytics:t.analytics, employees:t.employees, branches:t.branches, reviews:t.reviews, hours:t.hours, payment:t.payment, settings:t.settings })[id]||id;
+  const navLabel = (id) => ({ overview:t.overview, orders:t.orders, menu:t.menu, stock:t.stock, analytics:t.analytics, coupons:t.coupons, employees:t.employees, branches:t.branches, reviews:t.reviews, hours:t.hours, payment:t.payment, settings:t.settings })[id]||id;
 
   if (!currentUser || !page) {
     return (
@@ -1658,6 +1860,7 @@ export default function OwnerDashboard() {
           {page==="menu"      &&<MenuPage menuItems={menuItems} setMenuItems={setMenuItems} orders={orders} restaurantId={restaurant?.id} t={t} lang={lang}/>}
           {page==="stock"     &&<StockPage menuItems={menuItems} setMenuItems={setMenuItems} t={t} lang={lang}/>}
           {page==="analytics" &&<AnalyticsPage orders={orders} menuItems={menuItems} branches={enrichedBranches} weeklyRev={weeklyRev} t={t} lang={lang}/>}
+          {page==="coupons"   &&<CouponsPage coupons={coupons} setCoupons={setCoupons} restaurantId={restaurant?.id} t={t} lang={lang}/>}
           {page==="employees" &&<EmployeesPage staff={staff} setStaff={setStaff} branches={branches} restaurantId={restaurant?.id} t={t} lang={lang}/>}
           {page==="branches"  &&<BranchesPage branches={enrichedBranches} setBranches={setBranches} orders={orders} staff={staff} restaurantId={restaurant?.id} deliveryZones={deliveryZones} setDeliveryZones={setDeliveryZones} t={t} lang={lang}/>}
           {page==="reviews"   &&<ReviewsPage reviews={reviews} t={t} lang={lang}/>}
